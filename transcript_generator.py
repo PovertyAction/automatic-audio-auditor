@@ -1,15 +1,29 @@
-import speech_recognition as sr
 import os
 from pydub import AudioSegment
+import numpy as np
+import azure_transcribe
 
 def increase_sound_volume(sound, amount):
     return sound + amount
 
-def generate_transcript(audio_url, language='en', adjust_for_ambient_noise=False, increase_volume=False, offset=None, duration=None):
+def get_audio_duration(audio_url):
+  #Check that file exists
+  if not os.path.exists(audio_url):
+      return False
+
+  #Read file
+  sound = AudioSegment.from_file(audio_url)
+  return sound.duration_seconds
+
+def generate_transcript(audio_url, language='en', increase_volume=False):
   '''
-  Given the url of a file and a specified language, outputs its transcript using google API
-  Reference https://realpython.com/python-speech-recognition/
+  Given the url of a file and a specified language, outputs its transcript using azure speech recognition API
   '''
+
+  #Check that file exists
+  if not os.path.exists(audio_url):
+      return False
+
   #Read file
   sound = AudioSegment.from_file(audio_url)
 
@@ -21,26 +35,16 @@ def generate_transcript(audio_url, language='en', adjust_for_ambient_noise=False
     sound = increase_sound_volume(sound, 100)
 
   #Generate transcript
-  r = sr.Recognizer()
+  transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV)
 
-  #Transform raw audio to AudioFileType
-  with sr.AudioFile(AUDIO_FILE_WAV) as source:
-    if (adjust_for_ambient_noise):
-        r.adjust_for_ambient_noise(source)
+  return transcription
 
-    #Transform source to AudioData type, which can be read by the transcript API
-    audio = r.record(source, offset=offset, duration=duration)
-
-    #Use API to generate transcript
-    transcript = r.recognize_google(audio, language=language)
-
-    return transcript
 
 if __name__ =='__main__':
 
-    audio_url = "X:\Box Sync\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Audio Audits (Consent)\AA_01411b0c-5395-4065-8118-8c21edcbafac-audio_audit_cons_c_call_phone.m4a"
+    audio_url = "X:\Box Sync\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Audio Audits (Consent)\AA_0199ef62-8639-43a7-b156-a6914f1396be-audio_audit_cons_c_call_phone.m4a"
     language = 'es-CO'
 
+    print(f'Duration: {get_audio_duration(audio_url)}')
+
     print(f'Transcript {generate_transcript(audio_url, language)}')
-    print(f'Transcript {generate_transcript(audio_url, language, adjust_for_ambient_noise=True)}')
-    print(f'Transcript {generate_transcript(audio_url, language, adjust_for_ambient_noise=True, increase_volume=True)}')
