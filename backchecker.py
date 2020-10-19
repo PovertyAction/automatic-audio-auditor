@@ -9,6 +9,8 @@ import questionnaire_texts
 
 from columns_specifications import *
 
+import nltk
+
 FIRST_CONSENT = 'first_consent'
 SECOND_CONSENT = 'second_consent'
 
@@ -93,6 +95,21 @@ def check_if_respondent_acceptance_is_present(transcript, language):
     print('False')
     return False
 
+def remove_stopwords(text, full_language):
+    language = full_language.split('-')[0]
+
+    if(language=='es'):
+        stopwords = nltk.corpus.stopwords.words('spanish')
+    elif(language=='en'):
+        stopwords = nltk.corpus.stopwords.words('english')
+    else:
+        return None
+
+    text_without_stopwords =' '.join([w for w in text.split(' ') if w not in stopwords])
+    return text_without_stopwords
+
+
+
 
 def process_audio_audit(survey_part_to_process, survey_data,
                         language, parth_to_audio_audits_dir):
@@ -108,12 +125,16 @@ def process_audio_audit(survey_part_to_process, survey_data,
     print(f'Transcript:{transcript}')
 
     original_text = questionnaire_texts.get_original_script(survey_part_to_process)
-    print(f'Original_text:{original_text}')
+    # print(f'Original_text:{original_text}')
+
+    #Remove stopwords from original_text for computing difference with transcript
+    original_text_without_stopwords = remove_stopwords(original_text, language)
+    print(f'original_text_without_stopwords:{original_text_without_stopwords}')
 
     # For classic difference metrics
     # difference_measure = text_differences.compute_standard_difference_measures(original_text, transcript)
 
-    custom_difference_measure, words_missing = text_differences.compute_custom_difference_measure(original_text, transcript)
+    custom_difference_measure, words_missing = text_differences.compute_custom_difference_measure(original_text_without_stopwords, transcript)
 
     acceptance_present = check_if_respondent_acceptance_is_present(transcript, language)
 
@@ -196,7 +217,7 @@ def automatic_backcheck(survey_directory, consents_audio_audits_folder,
     completed_surveys_df = get_completed_surveys(surveys_df)
 
     results = []
-    n_rows_to_process = 10#surveys_df.shape[0]
+    n_rows_to_process = 2#surveys_df.shape[0]
 
     #Analyze each survey
     for index, row in completed_surveys_df.head(n_rows_to_process).iterrows():
