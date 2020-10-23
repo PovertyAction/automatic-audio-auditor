@@ -18,3 +18,5 @@ COL_SECOND_CONSENT_AUDIO_AUDIT_PATH = 'audio_audit_cons_2'
 # cons2_audio	Do you give consent to being audio recorded?
 
 # EXISTE completed_surveys_df$cons2_audio?
+
+COL_FULL_SURVEY_AUDIO_AUDIT_PATH = 'audio_audit_survey'

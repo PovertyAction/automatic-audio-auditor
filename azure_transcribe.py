@@ -70,7 +70,7 @@ def generate_transcript(file_path):
     speech_recognizer.canceled.connect(stop_cb)
 
     #For other callbacks:
-    speech_recognizer.recognizing.connect(lambda evt: print_if_debugging('RECOGNIZING: {}'.format(evt)))
+    # speech_recognizer.recognizing.connect(lambda evt: print_if_debugging('RECOGNIZING: {}'.format(evt)))
     speech_recognizer.session_started.connect(lambda evt: print_if_debugging('SESSION STARTED: {}'.format(evt)))
     speech_recognizer.session_stopped.connect(lambda evt: print_if_debugging('SESSION STOPPED {}'.format(evt)))
     speech_recognizer.canceled.connect(lambda evt: print_if_debugging('CANCELED {}'.format(evt)))
@@ -82,9 +82,20 @@ def generate_transcript(file_path):
     while not done:
         time.sleep(0.5)
 
-    full_transcript = " ".join(recognized_text)
+    full_transcript = recognized_text
     print_if_debugging(full_transcript)
     return full_transcript
 
 if __name__ == '__main__':
-    print(generate_transcript('transcript.wav'))
+    get_speech_config_properties()
+    # print(generate_transcript('transcript.wav'))
+
+
+
+#     wordLevelTimestampsEnabled
+#
+# Optional, false by default. Specifies if word level timestamps should be added to the output.
+#
+# diarizationEnabled
+#
+# Optional, false by default. Specifies that diarization analysis should be carried out on the input, which is expected to be mono channel containing two voices. Note: Requires wordLevelTimestampsEnabled to be set to true.
