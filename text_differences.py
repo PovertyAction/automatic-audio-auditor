@@ -1,24 +1,69 @@
 import jiwer
+import nltk
+from nltk.stem.snowball import SnowballStemmer
+sbEng = SnowballStemmer('english')
+sbEsp = SnowballStemmer('spanish')
 
-def compute_custom_difference_measure(ground_truth, transcript):
+def get_stemmer(full_language):
+    language = full_language.split('-')[0]
+    if language=='es':
+        return sbEsp
+    elif language=='en':
+        return sbEng
+    else:
+        return None
+
+def remove_stopwords(text, full_language):
+    language = full_language.split('-')[0]
+
+    if(language=='es'):
+        stopwords = nltk.corpus.stopwords.words('spanish')
+    elif(language=='en'):
+        stopwords = nltk.corpus.stopwords.words('english')
+    else:
+        return None
+
+    text_without_stopwords = [w for w in text if w not in stopwords]
+    return text_without_stopwords
+
+def compute_custom_difference_measure(orgininal_script, transcript, language):
     '''
-    Check how much of ground_truth is missing in transcript
+    Check how much of orgininal_script is missing in transcript. Clean and remove stopwords
     '''
-    transformation = jiwer.Compose([
-        jiwer.SubstituteRegexes({"¡": "", "¿":""}),
-        jiwer.SubstituteWords({"días/tardes/noches": ""}),
+    cleaning = jiwer.Compose([
+        jiwer.SubstituteRegexes({"¡": "", "¿":"", "á": "a", "é": "e", "í": "i", "ó": "o","ú": "u"}),
+        jiwer.SubstituteWords({ "tardes": "dias",
+                                "noches": "dias",
+                                " uno ": " 1 ",
+                                " dos ": " 2 ",
+                                " tres ": " 3 ",
+                                " cuatro ": " 4 ",
+                                " cinco ": " 5 ",
+                                " seis ": " 6 ",
+                                " siete ": " 7 ",
+                                " ocho ": " 8 ",
+                                " nueve ": " 9 "}),
         jiwer.RemovePunctuation(),
         jiwer.ToLowerCase(),
         jiwer.SentencesToListOfWords(word_delimiter=" "),
         jiwer.RemoveEmptyStrings()
     ])
 
-    ground_truth_transformed = transformation(ground_truth)
-    transcript_transformed = transformation(transcript)
+    #Clean both
+    orgininal_script_transformed = cleaning(orgininal_script)
+    transcript_transformed = cleaning(transcript)
 
-    words_missing = [word for word in ground_truth_transformed if word not in transcript_transformed]
+    #Remove stopwords from original_script
+    orgininal_script_transformed = remove_stopwords(orgininal_script_transformed, language)
 
-    return len(words_missing)/len(ground_truth_transformed), words_missing
+    #Lemmatize transcript
+    stemmer = get_stemmer(language)
+    transcript_transformed_stem = [stemmer.stem(word) for word in transcript_transformed]
+
+    #Get words form orgininal_script_transformed whose stem is not in transcript_transformed_stem
+    words_missing = [word for word in orgininal_script_transformed if stemmer.stem(word) not in transcript_transformed_stem]
+
+    return len(words_missing)/len(orgininal_script_transformed), words_missing
 
 def compute_standard_difference_measures(ground_truth, transcript, preprocessing=True):
 
