@@ -129,13 +129,13 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
     #Get question script
     question_script = questionnaire_texts.get_question_script(question_code)
     if not question_script:
-        print(f"Didnt find question script for {question_code}\n")
+        print(f"Didnt find question script for {question_code}")
         return False
 
     #Get transcript for specific question and answer
     q_transcript = transcript_generator.generate_transcript(audio_path, language, offset=q_first_appeared, duration = q_duration)
     if not q_transcript:
-        print(f'Couldnt generate transcript for question {question_code}\n')
+        print(f'Couldnt generate transcript for question {question_code}')
         return False
 
     #Get % of script that was actually pronounced
@@ -202,7 +202,7 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
 
     questions_results = []
     #Now we analyze each question
-    for index, row in text_audit_df.iterrows():
+    for index, row in text_audit_df.head(13).iterrows():
 
         #Skip initial part of text audit which are not related to questions
         if(index<first_question_index):
@@ -256,7 +256,9 @@ def process_consent_audio_audit(survey_part_to_process, survey_data,
         return_dict['q_words_missing'] = words_missing
         return_dict['q_and_ans_transcript'] = transcript_sentences
         return_dict['q_script'] = question_script
-        # 'audio_path':audio_path,
+    else:
+        for key in ['perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script']:
+             return_dict[key]=""
 
 
     if survey_part_to_process == SECOND_CONSENT:
@@ -275,6 +277,8 @@ def analyze_audio_recordings(row, language, consents_audio_audits_path, survey_a
     results = []
 
     case_id = row[COL_CASEID]
+    print(f'Working on case_id {case_id}')
+
 
     #Process first two consents
     for consent_name in [FIRST_CONSENT, SECOND_CONSENT]:
@@ -298,13 +302,9 @@ def analyze_audio_recordings(row, language, consents_audio_audits_path, survey_a
 
     if len(results)>0:
         #Save results in a .csv
-        results_df = pd.DataFrame()
-        results_df = results_df.append(results)
-
-        results_df.columns=['case_id','Survey_part', 'transcript_sentences', 'original_text', 'audio_path', 'percentage_words_missing', 'words_missing', 'participation_concent_question_present', 'recording_concent_question_present', 'acceptance_present']
-
+        results_df = pd.DataFrame(columns=['question', 'read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
+        results_df = results_df.append(results, ignore_index=True)
         results_df.to_csv(case_id+'_results.csv', index=False)
-
 
     return results
 
@@ -377,7 +377,7 @@ def run_audio_audit(survey_directory, consents_audio_audits_folder,
                                 text_audits_path=text_audits_path)
 
         #Create report of errors
-        add_results_to_report(results, row)
+        # add_results_to_report(results, row)
 
 
 
