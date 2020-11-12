@@ -26,7 +26,7 @@ def remove_stopwords(text, full_language):
     text_without_stopwords = [w for w in text if w not in stopwords]
     return text_without_stopwords
 
-def compute_custom_difference_measure(orgininal_script, transcript, language):
+def compute_perc_script_missing(orgininal_script, transcript, language):
     '''
     Check how much of orgininal_script is missing in transcript. Clean and remove stopwords
     '''
@@ -65,40 +65,40 @@ def compute_custom_difference_measure(orgininal_script, transcript, language):
 
     return len(words_missing)/len(orgininal_script_transformed), words_missing
 
-def compute_standard_difference_measures(ground_truth, transcript, preprocessing=True):
-
-    #Define text preprocessing before comparison
-    transformation = jiwer.Compose([
-        jiwer.RemovePunctuation(),
-        jiwer.ToLowerCase(),
-        # jiwer.Strip(),
-        # jiwer.RemoveMultipleSpaces(),
-        # jiwer.RemoveWhiteSpace(replace_by_space=False),
-        jiwer.SentencesToListOfWords(word_delimiter=" "),
-        # jiwer.Strip(),
-        jiwer.RemoveEmptyStrings(),
-
-        # jiwer.SubstituteWords(dictionary: Mapping[str, str])
-    ])
-        # https://pypi.org/project/jiwer/
-        # default_transformation = jiwer.Compose([
-        #     jiwer.RemoveMultipleSpaces(),
-        #     jiwer.Strip(),
-        #     jiwer.SentencesToListOfWords(),
-        #     jiwer.RemoveEmptyStrings()
-
-    if(preprocessing):
-        measures = jiwer.compute_measures(
-            ground_truth,
-            transcript,
-            truth_transform=transformation,
-            hypothesis_transform=transformation)
-    else:
-        measures = jiwer.compute_measures(
-            ground_truth,
-            transcript)
-
-    return measures#['wer']#, measures['mer'], measures['wil']
+# def compute_standard_difference_measures(ground_truth, transcript, preprocessing=True):
+#
+#     #Define text preprocessing before comparison
+#     transformation = jiwer.Compose([
+#         jiwer.RemovePunctuation(),
+#         jiwer.ToLowerCase(),
+#         # jiwer.Strip(),
+#         # jiwer.RemoveMultipleSpaces(),
+#         # jiwer.RemoveWhiteSpace(replace_by_space=False),
+#         jiwer.SentencesToListOfWords(word_delimiter=" "),
+#         # jiwer.Strip(),
+#         jiwer.RemoveEmptyStrings(),
+#
+#         # jiwer.SubstituteWords(dictionary: Mapping[str, str])
+#     ])
+#         # https://pypi.org/project/jiwer/
+#         # default_transformation = jiwer.Compose([
+#         #     jiwer.RemoveMultipleSpaces(),
+#         #     jiwer.Strip(),
+#         #     jiwer.SentencesToListOfWords(),
+#         #     jiwer.RemoveEmptyStrings()
+#
+#     if(preprocessing):
+#         measures = jiwer.compute_measures(
+#             ground_truth,
+#             transcript,
+#             truth_transform=transformation,
+#             hypothesis_transform=transformation)
+#     else:
+#         measures = jiwer.compute_measures(
+#             ground_truth,
+#             transcript)
+#
+#     return measures#['wer']#, measures['mer'], measures['wil']
 
 if __name__ == '__main__':
     ground_truth = 'mi nombre es felipe alamos illanes'

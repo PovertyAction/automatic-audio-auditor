@@ -118,7 +118,7 @@ def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check
 
 
 
-def analyze_survey_question(audio_path, tex_audit_row, first_q_sec):
+def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec, read_appropiately_threshold=0.25):
 
     #Get question name, code, appereance and duration
     question_full_name = tex_audit_row['Field name']
@@ -140,20 +140,36 @@ def analyze_survey_question(audio_path, tex_audit_row, first_q_sec):
 
     #Get % of script that was actually pronounced
     full_transcript = " ".join(q_transcript)
-    custom_difference_measure, words_missing = text_differences.compute_custom_difference_measure(question_script, q_transcript, language)
+    perc_script_missing, words_missing = text_differences.compute_perc_script_missing(question_script, q_transcript, language)
 
-    #Check big difference between question and script
-    if custom_difference_measure>0.25:
-        #Print which question and time are we looking to
-        q_first_appeared_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared))
-        q_finished_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared+q_duration))
-        
-        print(f'question code {question_code}')
-        print(f'{q_first_appeared_formatted}-{q_finished_formatted}')
-        print(f'question_script {question_script}')
-        print(f'transcript:{q_transcript}')
-        print(f'custom_difference_measure: {custom_difference_measure}')
-        print(f'words_missing: {words_missing}\n')
+    response = {}
+
+    #Print which question and time are we looking to
+    q_first_appeared_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared))
+    q_finished_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared+q_duration))
+
+    #Compare recorded response with surveycto saved response
+    #answer_matches_surveycto = get_surveycto_answer(survey_df, question_code)
+
+    #Prepare response dict
+    response['question'] = question_code
+    response['time'] = f'{q_first_appeared_formatted}-{q_finished_formatted}'
+    response['read_appropiately'] = perc_script_missing<read_appropiately_threshold
+
+    if response['read_appropiately'] is False:
+        response['perc_script_missing'] = perc_script_missing
+        response['q_words_missing'] = words_missing
+        response['q_script'] = question_script
+        response['q_and_ans_transcript'] = q_transcript
+
+    response['answer_matches_surveycto'] = 'PENDING' #answer_matches_surveycto
+
+    print(response)
+
+    return response
+
+
+
 
 def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, text_audits_dir_path):
 
@@ -172,9 +188,8 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
     #Get text audit
     text_audit_path = get_file_path(survey_data, text_audits_dir_path, file_to_get = TEXT_AUDIT)
 
-    print(f'Working on audio_path {audio_path}')
-    print(f'Text audit {text_audit_path}')
-
+    # print(f'Working on audio_path {audio_path}')
+    # print(f'Text audit {text_audit_path}')
 
     #Lets cut down audios for each questions, then generate transcripts and compare with question script and answers given.
     text_audit_df = pd.read_csv(text_audit_path)
@@ -185,6 +200,7 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
     first_question_index = int(first_q_df.index[0])
     first_q_sec = int(first_q_df.iloc[0])
 
+    questions_results = []
     #Now we analyze each question
     for index, row in text_audit_df.iterrows():
 
@@ -192,11 +208,14 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
         if(index<first_question_index):
             continue
 
-        analyze_survey_question(audio_path, row, first_q_sec)
+        analysis_result = analyze_survey_question(survey_data, audio_path, row, first_q_sec)
+        if analysis_result:
+            questions_results.append(analysis_result)
 
+    return questions_results
 
 def process_consent_audio_audit(survey_part_to_process, survey_data,
-                        language, path_to_audio_audits_dir):
+                        language, path_to_audio_audits_dir, read_appropiately_threshold=0.3):
 
     audio_path = get_file_path(survey_data, path_to_audio_audits_dir, survey_part_to_process)
     if(not audio_path):
@@ -205,34 +224,40 @@ def process_consent_audio_audit(survey_part_to_process, survey_data,
 
     # print(f'Working on audio_path {audio_path}')
 
-    transcript_sentences = transcript_generator.generate_transcript(audio_path, language)#['hola','este es un transcript falso', 'aca','otra cosa']#
-    # print(f'Transcript:{transcript_sentences}')
+    transcript_sentences = transcript_generator.generate_transcript(audio_path, language)
 
-    original_text = questionnaire_texts.get_original_script(survey_part_to_process)
+    question_script = questionnaire_texts.get_original_script(survey_part_to_process)
     # print(f'Original_text:{original_text}')
-
 
     # For classic difference metrics
     # difference_measure = text_differences.compute_standard_difference_measures(original_text, transcript)
 
     full_transcript = " ".join(transcript_sentences)
-    custom_difference_measure, words_missing = text_differences.compute_custom_difference_measure(original_text, full_transcript, language)
+    perc_script_missing, words_missing = text_differences.compute_perc_script_missing(question_script, full_transcript, language)
 
     #Check if participation consent question is present in last 3 phrases of transcript
     participation_concent_question_present = check_if_participation_consent_question_is_present(" ".join(transcript_sentences[-3:]), language)
 
     #Check if consent yes response is present in last 2 phrases of transcript
-    acceptance_present = check_if_respondent_acceptance_is_present(" ".join(transcript_sentences[-2:]), language)
+    acceptance_present = \
+        check_if_respondent_acceptance_is_present(" ".join(transcript_sentences[-2:]),
+                                                    language)
 
-    return_dict = {
-            'transcript_sentences': transcript_sentences,
-            'original_text':original_text,
-            'audio_path':audio_path,
-            'custom_difference_measure':custom_difference_measure,
-            'words_missing':words_missing,
-            'participation_concent_question_present': participation_concent_question_present,
-            'recording_concent_question_present': True, #Default true given that first consent does not have recording q
-            'acceptance_present': acceptance_present}
+    return_dict = {}
+    return_dict['question'] = survey_part_to_process
+    return_dict['read_appropiately'] = perc_script_missing<read_appropiately_threshold
+
+    return_dict['participation_concent_question_present'] = participation_concent_question_present
+    return_dict['recording_concent_question_present'] = True #Default true given that first consent does not have recording q
+    return_dict['acceptance_present'] = acceptance_present
+
+    if return_dict['read_appropiately'] is False:
+        return_dict['perc_script_missing'] = perc_script_missing
+        return_dict['q_words_missing'] = words_missing
+        return_dict['q_and_ans_transcript'] = transcript_sentences
+        return_dict['q_script'] = question_script
+        # 'audio_path':audio_path,
+
 
     if survey_part_to_process == SECOND_CONSENT:
         #Check if recording consent question is present in last 3 phrases of transcript
@@ -247,33 +272,29 @@ def analyze_audio_recordings(row, language, consents_audio_audits_path, survey_a
 
     #List with results from processing different audio recording,
     #we will later transform it to a .csv
-
+    results = []
 
     case_id = row[COL_CASEID]
 
-    results = []
     #Process first two consents
-    # for consent_name in [FIRST_CONSENT, SECOND_CONSENT]:
-    #     consent_results = process_consent_audio_audit(
-    #                     survey_part_to_process = consent_name,
-    #                     survey_data = row,
-    #                     language = language,
-    #                     path_to_audio_audits_dir = consents_audio_audits_path)
-    #
-    #     if consent_results:
-    #         #Add case_id and survey_part to results
-    #         consent_results['case_id']= case_id
-    #         consent_results['Survey_part']= consent_name
-    #         results.append(consent_results)
+    for consent_name in [FIRST_CONSENT, SECOND_CONSENT]:
+        consent_results = process_consent_audio_audit(
+                        survey_part_to_process = consent_name,
+                        survey_data = row,
+                        language = language,
+                        path_to_audio_audits_dir = consents_audio_audits_path)
+
+        print(consent_results)
+        if consent_results:
+            #Add case_id and survey_part to results
+            # consent_results['case_id']= case_id
+            results.append(consent_results)
 
 
     #Process full survey
-    process_survey_audio_audit(row, language, survey_audio_audits_path, text_audits_path)
-
-
-
-
-
+    audio_audit_result = process_survey_audio_audit(row, language, survey_audio_audits_path, text_audits_path)
+    if audio_audit_result:
+        results.extend(audio_audit_result)
 
     if len(results)>0:
         #Save results in a .csv
@@ -322,10 +343,12 @@ def add_results_to_report(results, row, words_missing_rate_threshold = 0.3):
             print(f'Full survey audio path: {row[COL_FULL_SURVEY_AUDIO_AUDIT_PATH]}')
             print("////////////////////////////////////////////")
 
-def automatic_backcheck(survey_directory, consents_audio_audits_folder,
+def run_audio_audit(survey_directory, consents_audio_audits_folder,
                       survey_audio_audits_folder, text_audits_folder, language):
     '''
-    Given audio audits and a questionaire, it checks if the questions and consenst were appropiately delivered
+    Given audio audits and a questionaire, it checks if the questions and
+    consenst were appropiately delivered, and if answers were appropiately
+    recorded
     '''
 
     survey_path = os.path.join(survey_directory, survey_df_name)
@@ -341,7 +364,7 @@ def automatic_backcheck(survey_directory, consents_audio_audits_folder,
     #Get survey attempts that where completed
     completed_surveys_df = get_completed_surveys(surveys_df)
 
-    n_rows_to_process = 20#surveys_df.shape[0]
+    n_rows_to_process = 1#surveys_df.shape[0]
 
     report = []
 
@@ -368,7 +391,7 @@ if __name__=='__main__':
   survey_audio_audits_folder = "Audio Audits (Survey)"
   text_audits_folder = "Text Audits"
 
-  automatic_backcheck(survey_directory = survey_directory,
+  run_audio_audit(survey_directory = survey_directory,
                       consents_audio_audits_folder= consents_audio_audits_folder,
                       survey_audio_audits_folder = survey_audio_audits_folder,
                       text_audits_folder = text_audits_folder,
