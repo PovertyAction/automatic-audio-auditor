@@ -9,7 +9,7 @@ import questionnaire_texts
 
 from columns_specifications import *
 import time
-
+from num2words import num2words
 
 FIRST_CONSENT = 'first_consent'
 SECOND_CONSENT = 'second_consent'
@@ -116,6 +116,75 @@ def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check
     return False
 
 
+def get_surveycto_answer(survey_row_df, question_code):
+    return survey_row_df[question_code]
+
+def analyze_integer_response(surveycto_answer, question_code, question_transcript):
+
+    #A more flexible approach here would be to report false only if numbers dont match, but repond None if we couldnt get number from transcript. Could use text2num for that
+
+    #Lets look at last phrase in trascript and see if it has the survey_cto_answer
+    if str(int(surveycto_answer)) in question_transcript[-1] or num2words(surveycto_answer, lang='esp') in question_transcript[-1].lower():
+        return True
+
+    #Exceptional case for 'ninguno' or 'no'
+    elif str(int(surveycto_answer))==0 and \
+        ('ninguno' in question_transcript[-1].lower() or \
+        'no' in question_transcript[-1].lower()):
+        return True
+
+    #Exceptional case for 'background noise
+    elif 'background' in question_transcript[-1].lower():
+        return None
+
+    else:
+        print('integer rejected!!')
+        print(question_code)
+        print(question_transcript)
+        print(surveycto_answer)
+        return False
+
+def analyze_yes_no_response(surveycto_answer, question_code, question_transcript):
+    #Correct answer imputed
+    if (surveycto_answer=='Yes' and 'si' in question_transcript[-1].replace('í','i').lower()) or \
+       (surveycto_answer=='No' and 'no' in question_transcript[-1].lower()):
+        return True
+
+    #Wrong answer imputed
+    if (surveycto_answer=='No' and 'si' in question_transcript[-1].replace('í','i').lower()) or \
+       (surveycto_answer=='Yes' and 'no' in question_transcript[-1].lower()):
+        return False
+
+    #Can not conclude
+    else:
+        print('yesno_dk_refusal rejected!')
+        print(question_code)
+        print(question_transcript)
+        print(surveycto_answer)
+        return None
+
+def check_answer_given_matches_surveycto(survey_row_df, question_code, question_type, question_transcript):
+
+
+    surveycto_answer = get_surveycto_answer(survey_row_df, question_code)
+    print(question_code)
+    print(question_transcript)
+    print(surveycto_answer)
+    if question_type == 'integer':
+        return analyze_integer_response(surveycto_answer, question_code, question_transcript)
+
+    elif question_type == 'select_one yesno_dk_refusal':
+        return analyze_yes_no_response(surveycto_answer, question_code, question_transcript)
+
+
+    print('Not being able to recognize answer for this type of question')
+    # print(question_type)
+    # print(question_code)
+    # print(question_transcript)
+    # print(surveycto_answer)
+
+    return None
+
 
 
 def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec, read_appropiately_threshold=0.25):
@@ -126,8 +195,14 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
     q_first_appeared = tex_audit_row['First appeared (seconds into survey)']-first_q_sec
     q_duration = tex_audit_row['Total duration (seconds)']+1
 
+    question_type = questionnaire_texts.get_question_property(question_code, 'Type')
+
+    #Only checkng integer and yesno for now
+    if question_type != 'integer' and question_type != 'select_one yesno_dk_refusal':
+        return
+
     #Get question script
-    question_script = questionnaire_texts.get_question_script(question_code)
+    question_script = questionnaire_texts.get_question_property(question_code, 'Question')
     if not question_script:
         print(f"Didnt find question script for {question_code}")
         return False
@@ -149,11 +224,11 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
     q_finished_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared+q_duration))
 
     #Compare recorded response with surveycto saved response
-    #answer_matches_surveycto = get_surveycto_answer(survey_df, question_code)
+    answer_matches_surveycto = check_answer_given_matches_surveycto(survey_data, question_code, question_type, q_transcript)
 
     #Prepare response dict
     response['question'] = question_code
-    response['time'] = f'{q_first_appeared_formatted}-{q_finished_formatted}'
+    response['time_in_audio'] = f'{q_first_appeared_formatted}-{q_finished_formatted}'
     response['read_appropiately'] = perc_script_missing<read_appropiately_threshold
 
     if response['read_appropiately'] is False:
@@ -162,18 +237,26 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
         response['q_script'] = question_script
         response['q_and_ans_transcript'] = q_transcript
 
-    response['answer_matches_surveycto'] = 'PENDING' #answer_matches_surveycto
+    response['answer_matches_surveycto'] = answer_matches_surveycto
 
     print(response)
+    print("")
 
     return response
 
 
 
 
-def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, text_audits_dir_path):
+def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, text_audits_dir_path, survey_part):
 
-    audio_path = get_file_path(survey_data, audio_audits_dir_path, file_to_get = FULL_SURVEY)
+    if survey_part == FULL_SURVEY:
+        first_question = 'cons1_grp[1]/consented_grp[1]/dem2'
+        last_question = 'cons1_grp[1]/consented_grp[1]/note_end_1'#'cons1_grp[1]/consented_grp[1]/dem2'#
+    else: #Consent
+        first_question = 'cons1_grp[1]/cons'
+        last_question = 'cons1_grp[1]/consented_grp[1]/note_dem'
+
+    audio_path = get_file_path(survey_data, audio_audits_dir_path, file_to_get = survey_part)
 
     #Check we have an audio path
     if(not audio_path):
@@ -187,25 +270,28 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
 
     #Get text audit
     text_audit_path = get_file_path(survey_data, text_audits_dir_path, file_to_get = TEXT_AUDIT)
+    text_audit_df = pd.read_csv(text_audit_path)
 
     # print(f'Working on audio_path {audio_path}')
     # print(f'Text audit {text_audit_path}')
 
     #Lets cut down audios for each questions, then generate transcripts and compare with question script and answers given.
-    text_audit_df = pd.read_csv(text_audit_path)
-    first_question = 'cons1_grp[1]/consented_grp[1]/dem2'
 
     #Get first_question index in df and second of appereance according to text audit
-    first_q_df = text_audit_df.loc[text_audit_df['Field name'] == first_question, 'First appeared (seconds into survey)']
+    first_q_df = text_audit_df.loc[text_audit_df['Field name'] == first_question]
     first_question_index = int(first_q_df.index[0])
-    first_q_sec = int(first_q_df.iloc[0])
+    first_q_sec = int(first_q_df['First appeared (seconds into survey)'].iloc[0])
+
+    #Get last question index
+    last_q_df = text_audit_df.loc[text_audit_df['Field name'] == last_question]
+    last_question_index = int(last_q_df.index[0])
 
     questions_results = []
     #Now we analyze each question
-    for index, row in text_audit_df.head(13).iterrows():
+    for index, row in text_audit_df.iterrows():
 
-        #Skip initial part of text audit which are not related to questions
-        if(index<first_question_index):
+        #Skip initial part of text audit which are not related to questions, or last ones
+        if(index<first_question_index or index > last_question_index):
             continue
 
         analysis_result = analyze_survey_question(survey_data, audio_path, row, first_q_sec)
@@ -217,26 +303,28 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
 def process_consent_audio_audit(survey_part_to_process, survey_data,
                         language, path_to_audio_audits_dir, read_appropiately_threshold=0.3):
 
-    audio_path = get_file_path(survey_data, path_to_audio_audits_dir, survey_part_to_process)
+    audio_path = get_file_path(survey_data, path_to_audio_audits_dir,
+    survey_part_to_process)
+
     if(not audio_path):
-        # print("No audio_path")
+        print("No audio_path")
         return False
 
-    # print(f'Working on audio_path {audio_path}')
+    #Check audio exists
+    if not os.path.exists(audio_path):
+        print(f"Audio {audio_path} does not exist")
+        return False
 
     transcript_sentences = transcript_generator.generate_transcript(audio_path, language)
 
     question_script = questionnaire_texts.get_original_script(survey_part_to_process)
     # print(f'Original_text:{original_text}')
 
-    # For classic difference metrics
-    # difference_measure = text_differences.compute_standard_difference_measures(original_text, transcript)
-
     full_transcript = " ".join(transcript_sentences)
     perc_script_missing, words_missing = text_differences.compute_perc_script_missing(question_script, full_transcript, language)
 
     #Check if participation consent question is present in last 3 phrases of transcript
-    participation_concent_question_present = check_if_participation_consent_question_is_present(" ".join(transcript_sentences[-3:]), language)
+    # participation_concent_question_present = check_if_participation_consent_question_is_present(" ".join(transcript_sentences[-3:]), language)
 
     #Check if consent yes response is present in last 2 phrases of transcript
     acceptance_present = \
@@ -247,7 +335,7 @@ def process_consent_audio_audit(survey_part_to_process, survey_data,
     return_dict['question'] = survey_part_to_process
     return_dict['read_appropiately'] = perc_script_missing<read_appropiately_threshold
 
-    return_dict['participation_concent_question_present'] = participation_concent_question_present
+    # return_dict['participation_concent_question_present'] = participation_concent_question_present
     return_dict['recording_concent_question_present'] = True #Default true given that first consent does not have recording q
     return_dict['acceptance_present'] = acceptance_present
 
@@ -277,35 +365,42 @@ def analyze_audio_recordings(row, language, consents_audio_audits_path, survey_a
     results = []
 
     case_id = row[COL_CASEID]
-    print(f'Working on case_id {case_id}')
+    print(f'Case_id {case_id}')
+    print(f'Text_audit {row[COL_TEXT_AUDIT_PATH]}')
+    print(f'Firt consent {row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}')
+    print(f'Second consent {row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}')
+    print(f'Full survey {row[COL_FULL_SURVEY_AUDIO_AUDIT_PATH]}')
 
 
     #Process first two consents
-    for consent_name in [FIRST_CONSENT, SECOND_CONSENT]:
-        consent_results = process_consent_audio_audit(
-                        survey_part_to_process = consent_name,
-                        survey_data = row,
-                        language = language,
-                        path_to_audio_audits_dir = consents_audio_audits_path)
+    # for consent_name in [FIRST_CONSENT, SECOND_CONSENT]:
+    #     consent_results = process_consent_audio_audit(
+    #                     survey_part_to_process = consent_name,
+    #                     survey_data = row,
+    #                     language = language,
+    #                     path_to_audio_audits_dir = consents_audio_audits_path)
+    #
+    #     print(consent_results)
+    #     if consent_results:
+    #         #Add case_id and survey_part to results
+    #         # consent_results['case_id']= case_id
+    #         results.append(consent_results)
 
-        print(consent_results)
-        if consent_results:
-            #Add case_id and survey_part to results
-            # consent_results['case_id']= case_id
-            results.append(consent_results)
-
+    #Or, use this approach (for RD1 COL it was tricky cause consent is separated from full survey)
+    # consent_audio_audit_result = process_survey_audio_audit(row, language, consents_audio_audits_path, text_audits_path, FIRST_CONSENT)
 
     #Process full survey
-    audio_audit_result = process_survey_audio_audit(row, language, survey_audio_audits_path, text_audits_path)
+    audio_audit_result = process_survey_audio_audit(row, language, survey_audio_audits_path, text_audits_path, FULL_SURVEY)
     if audio_audit_result:
         results.extend(audio_audit_result)
 
     if len(results)>0:
         #Save results in a .csv
-        results_df = pd.DataFrame(columns=['question', 'read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
+        results_df = pd.DataFrame(columns=['question', 'time_in_audio','read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
         results_df = results_df.append(results, ignore_index=True)
         results_df.to_csv(case_id+'_results.csv', index=False)
 
+    print("")
     return results
 
 def log_and_print(text):
@@ -364,7 +459,7 @@ def run_audio_audit(survey_directory, consents_audio_audits_folder,
     #Get survey attempts that where completed
     completed_surveys_df = get_completed_surveys(surveys_df)
 
-    n_rows_to_process = 1#surveys_df.shape[0]
+    n_rows_to_process = surveys_df.shape[0]
 
     report = []
 

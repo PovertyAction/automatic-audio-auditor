@@ -15,9 +15,9 @@ def get_original_script(survey_part_to_process):
         return cons_2_original_text
 
 
-def get_question_script(question_code):
+def get_question_property(question_code, property):
     questions_df = pd.read_csv('questions_scripts.csv')
-    script_df = questions_df[questions_df['Code']==question_code]['Question']
+    script_df = questions_df[questions_df['Code']==question_code][property]
     if script_df.shape[0]>0:
         return script_df.iloc[0]
     else:
