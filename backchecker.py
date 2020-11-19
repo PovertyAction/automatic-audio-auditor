@@ -10,11 +10,17 @@ import questionnaire_texts
 from columns_specifications import *
 import time
 from num2words import num2words
+from text_to_num import alpha2digit# as alpha2digit_native
 
 FIRST_CONSENT = 'first_consent'
 SECOND_CONSENT = 'second_consent'
 FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
+
+# def alpha2digit(word, language)
+#     #replace 'una' for 'uno'
+#     word = word.replace('Una','Uno')
+#     return alpha2digit_native(word, language)
 
 def import_data(dataset_path):
   if dataset_path.endswith('dta'):
@@ -119,65 +125,129 @@ def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check
 def get_surveycto_answer(survey_row_df, question_code):
     return survey_row_df[question_code]
 
+def is_float(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+def is_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
 def analyze_integer_response(surveycto_answer, question_code, question_transcript):
 
     #A more flexible approach here would be to report false only if numbers dont match, but repond None if we couldnt get number from transcript. Could use text2num for that
+
+    if not is_int(surveycto_answer):
+        print(f'Surveycto answer not a num: {surveycto_answer}')
+        return None #or False?
 
     #Lets look at last phrase in trascript and see if it has the survey_cto_answer
     if str(int(surveycto_answer)) in question_transcript[-1] or num2words(surveycto_answer, lang='esp') in question_transcript[-1].lower():
         return True
 
-    #Exceptional case for 'ninguno' or 'no'
-    elif str(int(surveycto_answer))==0 and \
-        ('ninguno' in question_transcript[-1].lower() or \
-        'no' in question_transcript[-1].lower()):
+    #Exceptional case for 'ningunx' or 'no'
+    elif int(surveycto_answer)==0 and \
+        ('ningun' in question_transcript[-1].lower() or \
+        'no' in [w for w in question_transcript[-1].lower().split(" ")]): #no is a word in the last phrase
         return True
 
     #Exceptional case for 'background noise
     elif 'background' in question_transcript[-1].lower():
         return None
 
-    else:
-        print('integer rejected!!')
-        print(question_code)
-        print(question_transcript)
-        print(surveycto_answer)
-        return False
+    #Try to capture number from question_transcript, and check if its != to the one in surveycto
+    #Capture numbers
+    numeric_values_in_transcript = [int(float(alpha2digit(w,"es"))) \
+                                for w in question_transcript[-1].split(" ") \
+                                if is_float(alpha2digit(w,"es"))]
+    #Compare with surveycto answer
+    if len(numeric_values_in_transcript)>0:
+        if int(surveycto_answer)!=numeric_values_in_transcript[-1]:
+            return False
+
+    print('Not being able to recognize answer for INTEGER question')
+    return None
+
+def remove_accents(word):
+    for a,b in [('á','a'),('é','e'),('í','i'),('ó','o'),('ú','u')]:
+        word = word.replace(a,b)
+    return word
+
+def remove_punctuations(word):
+    return word.translate(str.maketrans('', '', string.punctuation))
+
+def word_exists_in_cleaned_text(text, word):
+
+    clean_text = remove_accents(text)
+    clean_text = remove_punctuations(clean_text)
+    clean_text = clean_text.lower()
+
+    return word in [w for w in clean_text.split(' ')]
+
+def get_no_string(language):
+    if language=='es':
+        return 'no'
+
+
+    return False
+
+def get_yes_string(language):
+    if language=='es':
+        return 'si'
+
+
+    return False
 
 def analyze_yes_no_response(surveycto_answer, question_code, question_transcript):
+
+    #If the question_transcript has too many phrases, it might be the case this questions contains other subquestions all toqueter (fsec3-fsec7 for example), and hence, the text_audit does not separate them, we cant do the analysis
+    if len(question_transcript)>6:
+        return None
+
     #Correct answer imputed
-    if (surveycto_answer=='Yes' and 'si' in question_transcript[-1].replace('í','i').lower()) or \
-       (surveycto_answer=='No' and 'no' in question_transcript[-1].lower()):
+    if (surveycto_answer=='Yes' and word_exists_in_cleaned_text(question_transcript[-1], get_yes_string(language='es'))) or \
+       (surveycto_answer=='No' and word_exists_in_cleaned_text(question_transcript[-1], get_no_string(language='es'))):
         return True
 
     #Wrong answer imputed
-    if (surveycto_answer=='No' and 'si' in question_transcript[-1].replace('í','i').lower()) or \
-       (surveycto_answer=='Yes' and 'no' in question_transcript[-1].lower()):
+    if (surveycto_answer=='No' and word_exists_in_cleaned_text(question_transcript[-1], get_yes_string(language='es'))) or \
+       (surveycto_answer=='Yes' and word_exists_in_cleaned_text(question_transcript[-1], get_no_string(language='es'))):
         return False
 
+    # print(surveycto_answer=='No')
+    # print(question_transcript)
+    # print([w for w in question_transcript[-1].lower().split(" ")])
+    # print('no' in [w for w in question_transcript[-1].lower().split(" ")])
     #Can not conclude
-    else:
-        print('yesno_dk_refusal rejected!')
-        print(question_code)
-        print(question_transcript)
-        print(surveycto_answer)
-        return None
+# else:
+    print('Not being able to recognize answer for YES/NO question')
+    return None
 
 def check_answer_given_matches_surveycto(survey_row_df, question_code, question_type, question_transcript):
 
+    #If last phrase of question_transcript is too long (has more than 5 words), then most probably we are missing the answer of respondent (last phrase is from surveyor)
+    if len(question_transcript[-1].split(" ")) >5:
+        print('Couldnt capture respondets answer')
+        return None
+
 
     surveycto_answer = get_surveycto_answer(survey_row_df, question_code)
-    print(question_code)
-    print(question_transcript)
-    print(surveycto_answer)
+    print(f'surveycto_answer {surveycto_answer}')
     if question_type == 'integer':
         return analyze_integer_response(surveycto_answer, question_code, question_transcript)
 
-    elif question_type == 'select_one yesno_dk_refusal':
+    elif question_type == 'select_one yesno_dk_refusal' or question_type == 'select_one yesno_refusal':
         return analyze_yes_no_response(surveycto_answer, question_code, question_transcript)
 
 
-    print('Not being able to recognize answer for this type of question')
+    print('Answer analysis for this type of question not implemented')
     # print(question_type)
     # print(question_code)
     # print(question_transcript)
@@ -187,31 +257,50 @@ def check_answer_given_matches_surveycto(survey_row_df, question_code, question_
 
 
 
-def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec, read_appropiately_threshold=0.25):
 
-    #Get question name, code, appereance and duration
-    question_full_name = tex_audit_row['Field name']
+
+
+def seconds_to_nice_format(time_in_seconds):
+    time_nice_format = time.strftime('%M:%S', time.gmtime(time_in_seconds))
+    return time_nice_format
+
+def analyze_survey_question(survey_data, audio_path, ta_row, first_q_offset, previous_ta_row=None, read_appropiately_threshold=0.25):
+
+    #Get question name, code, type
+    question_full_name = ta_row['Field name']
     question_code = question_full_name.split('/')[-1]
-    q_first_appeared = tex_audit_row['First appeared (seconds into survey)']-first_q_sec
-    q_duration = tex_audit_row['Total duration (seconds)']+1
+    print(f'question_code {question_code}')
 
-    question_type = questionnaire_texts.get_question_property(question_code, 'Type')
+    question_type = questionnaire_texts.get_question_property(question_code, 'type')
 
     #Only checkng integer and yesno for now
     if question_type != 'integer' and question_type != 'select_one yesno_dk_refusal':
+        print(f'Skipping question type {question_type}\n')
+        #Tell the transcript_generator to forget previous_transcript
+        transcript_generator.previous_transcript_to_none()
         return
 
     #Get question script
-    question_script = questionnaire_texts.get_question_property(question_code, 'Question')
+    question_script = questionnaire_texts.get_question_property(question_code, 'label:spanish')
     if not question_script:
         print(f"Didnt find question script for {question_code}")
         return False
 
-    #Get transcript for specific question and answer
-    q_transcript = transcript_generator.generate_transcript(audio_path, language, offset=q_first_appeared, duration = q_duration)
+    q_transcript = \
+        transcript_generator.generate_transcript(audio_url=audio_path,
+                                                language=language,
+                                                ta_row = ta_row,
+                                                previous_ta_row=previous_ta_row,
+                                                first_q_offset=first_q_offset)
+
+    q_first_appeared, q_duration = \
+        transcript_generator.get_first_appeared_and_duration(ta_row, first_q_offset)
+
     if not q_transcript:
         print(f'Couldnt generate transcript for question {question_code}')
         return False
+
+    print(f'transcript: {q_transcript}')
 
     #Get % of script that was actually pronounced
     full_transcript = " ".join(q_transcript)
@@ -219,16 +308,13 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
 
     response = {}
 
-    #Print which question and time are we looking to
-    q_first_appeared_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared))
-    q_finished_formatted = time.strftime('%M:%S', time.gmtime(q_first_appeared+q_duration))
-
     #Compare recorded response with surveycto saved response
     answer_matches_surveycto = check_answer_given_matches_surveycto(survey_data, question_code, question_type, q_transcript)
 
     #Prepare response dict
     response['question'] = question_code
-    response['time_in_audio'] = f'{q_first_appeared_formatted}-{q_finished_formatted}'
+    response['time_in_audio'] = \
+        f'{seconds_to_nice_format(q_first_appeared)}-{seconds_to_nice_format(q_first_appeared+q_duration)}'
     response['read_appropiately'] = perc_script_missing<read_appropiately_threshold
 
     if response['read_appropiately'] is False:
@@ -239,11 +325,18 @@ def analyze_survey_question(survey_data, audio_path, tex_audit_row, first_q_sec,
 
     response['answer_matches_surveycto'] = answer_matches_surveycto
 
-    print(response)
+    print(f'Output: {response}')
     print("")
 
     return response
 
+
+def check_if_row_belongs_to_grouped_question(row, previous_row):
+    if row['First appeared (seconds into survey)'] == previous_row['First appeared (seconds into survey)'] and \
+       row['Total duration (seconds)'] == previous_row['Total duration (seconds)']:
+       return True
+    else:
+       return True
 
 
 
@@ -288,15 +381,31 @@ def process_survey_audio_audit(survey_data, language, audio_audits_dir_path, tex
 
     questions_results = []
     #Now we analyze each question
-    for index, row in text_audit_df.iterrows():
+
+    previous_ta_row = None
+    # last_q_transcript = None
+
+    for index, ta_row in text_audit_df.iterrows():
+        # q_transcript = None
+
+        #Check if previous_row has exact starting point, then we are in a grouped question and we can use the same transcript
+        # grouped_question = check_if_row_belongs_to_grouped_question(ta_row, previous_ta_row)
+        # if grouped_question:
+        #     print('grouped q!')
+        #     q_transcript = last_q_transcript
 
         #Skip initial part of text audit which are not related to questions, or last ones
         if(index<first_question_index or index > last_question_index):
             continue
 
-        analysis_result = analyze_survey_question(survey_data, audio_path, row, first_q_sec)
+        analysis_result = analyze_survey_question(survey_data, audio_path, ta_row, first_q_sec, previous_ta_row)
+
         if analysis_result:
             questions_results.append(analysis_result)
+
+        #Keep record of last row and last transcripted quesiton
+        previous_ta_row = ta_row
+        # last_q_transcript = analysis_result['q_and_ans_transcript']
 
     return questions_results
 
@@ -459,12 +568,14 @@ def run_audio_audit(survey_directory, consents_audio_audits_folder,
     #Get survey attempts that where completed
     completed_surveys_df = get_completed_surveys(surveys_df)
 
-    n_rows_to_process = surveys_df.shape[0]
+    n_rows_to_process = 5#surveys_df.shape[0]
 
     report = []
 
     #Analyze each survey
     for index, row in completed_surveys_df.head(n_rows_to_process).iterrows():
+        if index == 0:
+            continue
         results = analyze_audio_recordings(row=row,
                                 language=language,
                                 consents_audio_audits_path=consents_audio_audits_path,

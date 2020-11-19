@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 cons_1_original_text = '¡Buenos días! Espero se encuentre bien. Mi nombre es y trabajo para IPA, una organización sin ánimo de lucro que investiga temas relacionados con desarrollo socioeconómico. Nos estamos comunicando con usted porque estamos haciendo una encuesta que no durará más de 20 minutos para conocer como el Coronavirus ha afectado a la población Colombiana. Por su participación recibirá 5,000 pesos de recarga a su celular. ¿Le gustaría participar? '
 
@@ -15,10 +16,28 @@ def get_original_script(survey_part_to_process):
         return cons_2_original_text
 
 
-def get_question_property(question_code, property):
+def get_question_property_2(question_code, property):
     questions_df = pd.read_csv('questions_scripts.csv')
     script_df = questions_df[questions_df['Code']==question_code][property]
     if script_df.shape[0]>0:
         return script_df.iloc[0]
+    else:
+        return False
+
+questionnaire_path = "X:\Box Sync\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Questionnaire\covid_col_may_19_5_2020.xlsx"
+questionnaire_df = pd.read_excel(questionnaire_path)
+
+def get_question_property(question_code, property):
+    script_df = questionnaire_df[questionnaire_df['name']==question_code][property]
+    if script_df.shape[0]>0:
+
+        response = script_df.iloc[0]
+        #Clean label content
+        if 'label' in property:
+            #Remove anything between <>
+            response = re.sub(r'\<.*?\>','',response)
+            #Remove anything between []
+            response = re.sub(r'\[.*?\]','',response)
+        return response
     else:
         return False
