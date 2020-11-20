@@ -24,10 +24,9 @@ def get_question_property_2(question_code, property):
     else:
         return False
 
-questionnaire_path = "X:\Box Sync\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Questionnaire\covid_col_may_19_5_2020.xlsx"
-questionnaire_df = pd.read_excel(questionnaire_path)
 
-def get_question_property(question_code, property):
+
+def get_question_property(questionnaire_df, question_code, property):
     script_df = questionnaire_df[questionnaire_df['name']==question_code][property]
     if script_df.shape[0]>0:
 
