@@ -25,10 +25,13 @@ TEXT_AUDIT = 'text_audit'
 
 def import_data(dataset_path):
   if dataset_path.endswith('dta'):
-    try:
-        dataset = pd.read_stata(dataset_path)
-    except ValueError:
-        dataset = pd.read_stata(dataset_path, convert_categoricals=False)
+
+      #We might want to do conver_categoricals=True to directly compare transcript answers with surveycto answers
+    # try:
+    #     dataset = pd.read_stata(dataset_path)
+    # except ValueError:
+    #     print('EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE')
+    dataset = pd.read_stata(dataset_path, convert_categoricals=False)
 
     label_dict = pd.io.stata.StataReader(dataset_path).variable_labels()
     try:
@@ -38,9 +41,6 @@ def import_data(dataset_path):
         value_label_dict = None
 
     return dataset, label_dict, value_label_dict
-
-
-
 
 
 
@@ -97,7 +97,11 @@ def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check
 
 
 
-
+def amount_of_words(phrase):
+    if phrase:
+        return len(phrase.split(' '))
+    else:
+        return False
 
 
 
@@ -154,6 +158,11 @@ class AnswerAnalyzer:
 
         return None
 
+    def check_yes_no_recorded_in_surveycto(self, yes_or_no):
+        if self.surveycto_answer==self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['survey_cto_yes_no_values'][yes_or_no]:
+            return True
+        else:
+            return False
 
     def analyze_yes_no_response(self):
 
@@ -182,20 +191,42 @@ class AnswerAnalyzer:
                 return 'si'
             return False
 
+
+
         #If the question_transcript has too many phrases, it might be the case this questions contains other subquestions all toqueter (fsec3-fsec7 for example), and hence, the text_audit does not separate them, we cant do the analysis
         if len(self.q_analyzer.q_transcript)>6:
             return None
 
+        #We will look for a yes or no in last phrase of transcript
+        #Nonetheless, it sometimes happens that last phrase its just a confirmation of the surveyor for the respondents answer.
+        #So, what we will do is to concatenate 2 last phrases if they are both short
+        last_phrase = self.q_analyzer.q_transcript[-1]
+
+        if len(self.q_analyzer.q_transcript) >1:
+            second_last_phrase = self.q_analyzer.q_transcript[-2]
+        else:
+            second_last_phrase = None
+
+        if amount_of_words(last_phrase) <=2 and amount_of_words(second_last_phrase) <=3:
+            phrase_to_analyze = second_last_phrase + " " + last_phrase
+        else:
+            phrase_to_analyze = last_phrase
+
         #Correct answer imputed
-        if (self.surveycto_answer=='Yes' and \
-            word_exists_in_cleaned_text(self.q_analyzer.q_transcript[-1], get_yes_string(language='es'))) or \
-           (self.surveycto_answer=='No' and \
-            word_exists_in_cleaned_text(self.q_analyzer.q_transcript[-1], get_no_string(language='es'))):
+        #Check a yes was written in survey cto as is found in transcript
+        #Check a no was written in survey cto as is found in transcript
+        if (self.check_yes_no_recorded_in_surveycto('yes') and \
+            word_exists_in_cleaned_text(phrase_to_analyze, get_yes_string(language='es'))) or \
+           (self.check_yes_no_recorded_in_surveycto('no') and \
+            word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
             return True
 
         #Wrong answer imputed
-        if (self.surveycto_answer=='No' and word_exists_in_cleaned_text(self.q_analyzer.q_transcript[-1], get_yes_string(language='es'))) or \
-           (self.surveycto_answer=='Yes' and word_exists_in_cleaned_text(self.q_analyzer.q_transcript[-1], get_no_string(language='es'))):
+        if (
+            self.check_yes_no_recorded_in_surveycto('no') and \
+                word_exists_in_cleaned_text(phrase_to_analyze, get_yes_string(language='es'))) or \
+           (self.check_yes_no_recorded_in_surveycto('yes') and \
+                word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
             return False
 
         print('Not being able to recognize answer for YES/NO question')
@@ -204,7 +235,12 @@ class AnswerAnalyzer:
 
 
     def get_surveycto_answer(self):
-        return self.q_analyzer.survey_entrie_analyzer.survey_row[self.q_analyzer.q_code]
+
+        #Check that question code is in survey df
+        if self.q_analyzer.q_code in self.q_analyzer.survey_entrie_analyzer.survey_row:
+            return self.q_analyzer.survey_entrie_analyzer.survey_row[self.q_analyzer.q_code]
+        else:
+            return None
 
     def check_answer_given_matches_surveycto(self):
 
@@ -218,11 +254,11 @@ class AnswerAnalyzer:
         if self.q_analyzer.q_type == 'integer':
             return self.analyze_integer_response()
 
-        elif self.q_analyzer.q_type == 'select_one yesno_dk_refusal' or self.q_analyzer.q_type == 'select_one yesno_refusal':
+        elif self.q_analyzer.q_type in self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['yes_no_question_types']:
             return self.analyze_yes_no_response()
 
 
-        print('Answer analysis for this type of question not implemented')
+        print(f'Answer analysis for q_type {self.q_analyzer.q_type} of question not implemented')
         # print(question_type)
         # print(question_code)
         # print(question_transcript)
@@ -250,22 +286,23 @@ class QuestionAnalyzer:
         #Get question name, code, type
         q_full_name = self.ta_row['Field name']
         self.q_code = q_full_name.split('/')[-1]
-        print(f'question_code {self.q_code}')
+        print(f'q_code {self.q_code}')
 
         self.q_type = questionnaire_texts.get_question_property(
             self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
             self.q_code,
             'type')
+        print(f'q_type {self.q_type}')
 
         #Only checkng integer and yesno for now
-        if  self.q_type != 'integer' and \
-            self.q_type != 'select_one yesno_dk_refusal' and\
-            self.q_type != 'select_one yesno_refusal':
-
-            print(f'Skipping question type {self.q_type}\n')
-            #Tell the transcript_generator to forget previous_transcript
-            transcript_generator.previous_transcript_to_none()
-            return
+        # if  self.q_type != 'integer' and \
+        #     self.q_type != 'select_one yesno_dk_refusal' and\
+        #     self.q_type != 'select_one yesno_refusal':
+        #
+        #     print(f'Skipping question type {self.q_type}\n')
+        #     #Tell the transcript_generator to forget previous_transcript
+        #     transcript_generator.previous_transcript_to_none()
+        #     return
 
         #Get question script
         self.q_script = questionnaire_texts.get_question_property(
@@ -481,8 +518,8 @@ class SurveyEntrieAnalyzer:
     def print_survey_info(self):
         print(f"Case_id {self.survey_row[COL_CASEID]}")
         print(f"Text_audit {self.survey_row[self.audio_auditor.params['col_text_audit_path']]}")#
-        print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
-        print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
+        # print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
+        # print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
         print(f"Full survey {self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]}")
 
     def analyze_audio_recording(self):
@@ -579,7 +616,7 @@ class AudioAuditor:
 
 if __name__=='__main__':
 
-    project_name = 'RECOVER_RD1_COL'
+    project_name = 'RECOVER_RD3_COL'
 
     audio_auditor = AudioAuditor(project_name)
 
