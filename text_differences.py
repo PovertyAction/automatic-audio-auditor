@@ -1,6 +1,8 @@
 import jiwer
 import nltk
 from nltk.stem.snowball import SnowballStemmer
+import re
+
 sbEng = SnowballStemmer('english')
 sbEsp = SnowballStemmer('spanish')
 
@@ -49,8 +51,11 @@ def compute_perc_script_missing(orgininal_script, transcript, language):
         jiwer.RemoveEmptyStrings()
     ])
 
+    #Remove anything between ${variable} from original_script
+    orgininal_script_transformed = re.sub(r'\${.*?\}','',orgininal_script)
+
     #Clean both
-    orgininal_script_transformed = cleaning(orgininal_script)
+    orgininal_script_transformed = cleaning(orgininal_script_transformed)
     transcript_transformed = cleaning(transcript)
 
     #Remove stopwords from original_script

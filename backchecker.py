@@ -296,6 +296,7 @@ class QuestionAnalyzer:
             'type')
         print(f'q_type {self.q_type}')
 
+
         #Only checkng integer and yesno for now
         # if  self.q_type != 'integer' and \
         #     self.q_type != 'select_one yesno_dk_refusal' and\
@@ -315,7 +316,11 @@ class QuestionAnalyzer:
         if not self.q_script:
             print(f"Didnt find question script for {self.q_code}")
             return False
-        print(f'question_script: {self.q_script}')
+        if len(self.q_script)==0 or (len(self.q_script)==1 and self.q_script==" "):
+            print(f"No question transcript (usually q contianed only instructions for surveyor) for {self.q_code}")
+            return False
+
+        # print(f'question_script: {self.q_script}')
 
         self.q_transcript = \
             transcript_generator.generate_transcript(

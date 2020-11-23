@@ -37,6 +37,9 @@ def get_question_property(questionnaire_df, question_code, property):
             response = re.sub(r'\<.*?\>','',response)
             #Remove anything between []
             response = re.sub(r'\[.*?\]','',response)
+
+            #Remove anything after 'Encuestador/a'
+            response = response.split('Encuestador')[0]
         return response
     else:
         return False
