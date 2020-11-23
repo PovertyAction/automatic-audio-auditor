@@ -160,7 +160,7 @@ class AnswerAnalyzer:
         return None
 
     def check_yes_no_recorded_in_surveycto(self, yes_or_no):
-        if self.surveycto_answer==self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['survey_cto_yes_no_values'][yes_or_no]:
+        if self.surveycto_answer in  self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['survey_cto_yes_no_values'][yes_or_no]:
             return True
         else:
             return False
@@ -277,9 +277,10 @@ def seconds_to_nice_format(time_in_seconds):
     return time_nice_format
 
 class QuestionAnalyzer:
-    def __init__(self, ta_row, previous_ta_row, survey_entrie_analyzer):
+    def __init__(self, ta_row, previous_ta_row, next_ta_row, survey_entrie_analyzer):
         self.ta_row = ta_row
         self.previous_ta_row = previous_ta_row
+        self.next_ta_row = next_ta_row
         self.survey_entrie_analyzer = survey_entrie_analyzer
 
     def analyze_survey_question(self, read_appropiately_threshold=0.5):
@@ -325,6 +326,7 @@ class QuestionAnalyzer:
                 language=self.survey_entrie_analyzer.audio_auditor.params['language'],
                 ta_row = self.ta_row,
                 previous_ta_row=self.previous_ta_row,
+                next_ta_row=self.next_ta_row,
                 first_q_offset=self.survey_entrie_analyzer.start_recording_ta_offset)
 
         if not self.q_transcript:
@@ -344,7 +346,8 @@ class QuestionAnalyzer:
         answer_matches_surveycto = answer_analyzer.check_answer_given_matches_surveycto()
 
         #Getting this again just to inlcude it in response
-        q_first_appeared, q_duration = transcript_generator.get_first_appeared_and_duration(self.ta_row, self.survey_entrie_analyzer.start_recording_ta_offset)
+        q_first_appeared, q_duration = transcript_generator.get_first_appeared_and_duration(
+        ta_row=self.ta_row, previous_ta_row=self.previous_ta_row, first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset)
 
         #Prepare response dict
         response['question'] = self.q_code
@@ -548,13 +551,16 @@ class SurveyEntrieAnalyzer:
         #Now we analyze each question, looping over the text audit entries
         q_results = []
         previous_ta_row = None
+        next_ta_row = None
         for index, ta_row in self.text_audit_df.iterrows():
 
             #Skip initial part of text audit which are not related to questions
             if(index<start_recording_ta_index or index > last_question_index):
                 continue
 
-            q_analyzer = QuestionAnalyzer(ta_row, previous_ta_row, self)
+            next_ta_row = self.text_audit_df.iloc[index+1]
+
+            q_analyzer = QuestionAnalyzer(ta_row, previous_ta_row, next_ta_row, self)
 
             q_analysis_result = q_analyzer.analyze_survey_question()
             if q_analysis_result:

@@ -39,22 +39,36 @@ def same_timeframe_as_previous_question(ta_row, previous_ta_row):
     if previous_ta_row is None:
         return False
 
-    if  get_first_appeared_and_duration(ta_row) == \
-        get_first_appeared_and_duration(previous_ta_row):
+    if  get_first_appeared_and_duration(ta_row=ta_row) == \
+        get_first_appeared_and_duration(ta_row=previous_ta_row):
         return True
     else:
         return False
 
-def get_first_appeared_and_duration(ta_row, first_q_offset=0):
+def get_first_appeared_and_duration(ta_row, first_q_offset=0, previous_ta_row=None, next_ta_row=None):
     q_first_appeared = ta_row['First appeared (seconds into survey)']-first_q_offset
-    q_duration = ta_row['Total duration (seconds)']+1
-    return q_first_appeared, q_duration
+
+    #Sometimes duration is longer than it should (given back and forths), so we will choose duration = difference between next q starting point and current one, if duration reported is too long.
+    q_duration = ta_row['Total duration (seconds)']
+
+    if next_ta_row is not None:
+        next_q_first_appeared = next_ta_row['First appeared (seconds into survey)']-first_q_offset
+
+        if next_q_first_appeared-q_first_appeared<q_duration and next_q_first_appeared!=q_first_appeared: #Be sure they dont have the same starting point (grouped questions)
+            print('fixing q duration!!!!!!!!!!!!!!!')
+            print(f'next_q_first_appeared {next_q_first_appeared}')
+            print(f'q_first_appeared {q_first_appeared}')
+            print(f'q_duration {q_duration}')
+
+            q_duration = next_q_first_appeared-q_first_appeared
+
+    return q_first_appeared, q_duration+1
 
 def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
-def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, increase_volume=False):
+def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False):
     '''
     Given the url of a file and a specified language, outputs its transcript using azure speech recognition API.
     '''
@@ -72,15 +86,15 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
             print('Using cached transcript')
             return transcripts_cache[project_name][case_id][q_code]
 
-    #If question has same time-frame as previous question, return previous transcript
+    #If question has same timeframe as previous question, return previous transcript
     if same_timeframe_as_previous_question(ta_row, previous_ta_row):
 
-        if previous_transcription: #Maybe we have the same timeframe as previous q but no transcript was generate (ex, for notes)
+        if previous_transcription: #Maybe we have the same timeframe
             print('Using previous transcription')
             return previous_transcription
 
     #Get offset and duration fo question in audio record
-    offset, duration = get_first_appeared_and_duration(ta_row, first_q_offset)
+    offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
 
     #Read file
     sound = AudioSegment.from_file(audio_url)
