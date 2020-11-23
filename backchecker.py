@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import string
+import sys
 
 import transcript_generator
 import text_differences
@@ -317,6 +318,9 @@ class QuestionAnalyzer:
 
         self.q_transcript = \
             transcript_generator.generate_transcript(
+                project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+                case_id = self.survey_entrie_analyzer.case_id,
+                q_code = self.q_code,
                 audio_url=self.survey_entrie_analyzer.audio_path,
                 language=self.survey_entrie_analyzer.audio_auditor.params['language'],
                 ta_row = self.ta_row,
@@ -524,7 +528,7 @@ class SurveyEntrieAnalyzer:
 
     def analyze_audio_recording(self):
 
-        case_id = self.survey_row[COL_CASEID]
+        self.case_id = self.survey_row[COL_CASEID]
         self.print_survey_info()
 
         self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
@@ -563,7 +567,7 @@ class SurveyEntrieAnalyzer:
         if len(q_results)>0:
             results_df = pd.DataFrame(columns=['question', 'time_in_audio','read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
             results_df = results_df.append(q_results, ignore_index=True)
-            results_df.to_csv(case_id+'_results.csv', index=False)
+            results_df.to_csv(self.case_id+'_results.csv', index=False)
 
         print("")
         return q_results
@@ -616,7 +620,10 @@ class AudioAuditor:
 
 if __name__=='__main__':
 
-    project_name = 'RECOVER_RD3_COL'
+    projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
+
+    project_name = projects_ids_to_names[sys.argv[1]]
+    print(project_name)
 
     audio_auditor = AudioAuditor(project_name)
 
