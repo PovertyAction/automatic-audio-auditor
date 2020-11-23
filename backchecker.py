@@ -208,7 +208,7 @@ class AnswerAnalyzer:
         else:
             second_last_phrase = None
 
-        if amount_of_words(last_phrase) <=2 and amount_of_words(second_last_phrase) <=3:
+        if second_last_phrase and amount_of_words(last_phrase) <=2 and amount_of_words(second_last_phrase) <=3:
             phrase_to_analyze = second_last_phrase + " " + last_phrase
         else:
             phrase_to_analyze = last_phrase
@@ -245,12 +245,13 @@ class AnswerAnalyzer:
 
     def check_answer_given_matches_surveycto(self):
 
+        self.surveycto_answer = self.get_surveycto_answer()
+
         #If last phrase of question_transcript is too long (has more than 5 words), then most probably we are missing the answer of respondent (last phrase is from surveyor)
         if len(self.q_analyzer.q_transcript[-1].split(" ")) >5:
             print('Couldnt capture respondets answer')
             return None
 
-        self.surveycto_answer = self.get_surveycto_answer()
         print(f'surveycto_answer {self.surveycto_answer}')
         if self.q_analyzer.q_type == 'integer':
             return self.analyze_integer_response()
@@ -297,15 +298,12 @@ class QuestionAnalyzer:
         print(f'q_type {self.q_type}')
 
 
-        #Only checkng integer and yesno for now
-        # if  self.q_type != 'integer' and \
-        #     self.q_type != 'select_one yesno_dk_refusal' and\
-        #     self.q_type != 'select_one yesno_refusal':
-        #
-        #     print(f'Skipping question type {self.q_type}\n')
-        #     #Tell the transcript_generator to forget previous_transcript
-        #     transcript_generator.previous_transcript_to_none()
-        #     return
+        #Do not check notes nor checkpoints
+        if  self.q_type == 'note' or 'checkpoint' in self.q_code:
+            print(f'Skipping question type {self.q_type}\n')
+            #Tell the transcript_generator to forget previous_transcript
+            transcript_generator.previous_transcript_to_none()
+            return
 
         #Get question script
         self.q_script = questionnaire_texts.get_question_property(
@@ -316,11 +314,12 @@ class QuestionAnalyzer:
         if not self.q_script:
             print(f"Didnt find question script for {self.q_code}")
             return False
-        if len(self.q_script)==0 or (len(self.q_script)==1 and self.q_script==" "):
-            print(f"No question transcript (usually q contianed only instructions for surveyor) for {self.q_code}")
+        if len(self.q_script.replace(" ", ""))==0:
+            print(f"No question transcript (usually question contianed only instructions for surveyor) for {self.q_code}")
             return False
 
-        # print(f'question_script: {self.q_script}')
+        print(f'question_script: {self.q_script}')
+        # print(f'len question_script: {len(self.q_script)}')
 
         self.q_transcript = \
             transcript_generator.generate_transcript(
@@ -360,13 +359,13 @@ class QuestionAnalyzer:
             f'{seconds_to_nice_format(q_first_appeared)}-{seconds_to_nice_format(q_first_appeared+q_duration)}'
         response['read_appropiately'] = perc_script_missing<read_appropiately_threshold
 
-        if response['read_appropiately'] is False:
-            response['perc_script_missing'] = perc_script_missing
-            response['q_words_missing'] = words_missing
-            response['q_script'] = self.q_script
-            response['q_and_ans_transcript'] = self.q_transcript
-
+        # if response['read_appropiately'] is False:
+        response['perc_script_missing'] = perc_script_missing
+        response['q_words_missing'] = words_missing
+        response['q_script'] = self.q_script
+        response['q_and_ans_transcript'] = self.q_transcript
         response['answer_matches_surveycto'] = answer_matches_surveycto
+        response['surveycto_answer'] = answer_analyzer.surveycto_answer
 
         print(f'Output: {response}')
         print("")
@@ -576,7 +575,7 @@ class SurveyEntrieAnalyzer:
 
         #Save results in a .csv
         if len(q_results)>0:
-            results_df = pd.DataFrame(columns=['question', 'time_in_audio','read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
+            results_df = pd.DataFrame()#columns=['question', 'time_in_audio','read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
             results_df = results_df.append(q_results, ignore_index=True)
             results_df.to_csv(self.case_id+'_results.csv', index=False)
 

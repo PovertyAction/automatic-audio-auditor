@@ -38,8 +38,22 @@ def get_question_property(questionnaire_df, question_code, property):
             #Remove anything between []
             response = re.sub(r'\[.*?\]','',response)
 
+            #Remove jumps of line
+            response = re.sub(r'[\r\n]+','',response)
+
             #Remove anything after 'Encuestador/a'
             response = response.split('Encuestador')[0]
+
+            #Remove anything after 'Nota:'
+            response = response.split('Nota:')[0]
+
+            #Remove text in upper case like SECCIÓN 7. RED DE SEGURIDAD SOCIAL\
+            #Remove anything between SECC and .
+            response = re.sub(r'SEC.*?\.','',response)
+            response = re.sub(r'\b[A-Z]+\b', '', response)
+
+
+
         return response
     else:
         return False
