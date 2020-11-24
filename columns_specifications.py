@@ -1,4 +1,3 @@
-COL_CASEID = 'caseid'
 
 COL_SURVEY_STATUS = 'phone_response_answ'
 

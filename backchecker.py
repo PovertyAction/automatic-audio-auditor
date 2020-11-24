@@ -284,7 +284,7 @@ class QuestionAnalyzer:
         self.next_ta_row = next_ta_row
         self.survey_entrie_analyzer = survey_entrie_analyzer
 
-    def analyze_survey_question(self, read_appropiately_threshold=0.5):
+    def analyze_survey_question(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55):
 
         #Get question name, code, type
         q_full_name = self.ta_row['Field name']
@@ -343,7 +343,13 @@ class QuestionAnalyzer:
         full_transcript = " ".join(self.q_transcript)
         perc_script_missing, words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
 
-        response = {}
+        #Question is read appropiately as long as the percentage of words missing from script is lower than thrshold.
+        #For very short question scripts (below 4 words), we reduce threshold
+        if len(self.q_script.split(" "))<=3:
+            read_appropiately_threshold = read_appropiately_threshold_short_questions
+
+        q_read_appropiately = perc_script_missing<read_appropiately_threshold
+
 
         #Compare recorded response with surveycto saved response
         answer_analyzer = AnswerAnalyzer(self)
@@ -353,11 +359,18 @@ class QuestionAnalyzer:
         q_first_appeared, q_duration = transcript_generator.get_first_appeared_and_duration(
         ta_row=self.ta_row, previous_ta_row=self.previous_ta_row, first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset)
 
+        #
+
+
+
         #Prepare response dict
+        response = {}
+        response['enum_id'] = self.survey_entrie_analyzer.enumerator_id
+        response['case_id'] = self.survey_entrie_analyzer.case_id
         response['question'] = self.q_code
         response['time_in_audio'] = \
             f'{seconds_to_nice_format(q_first_appeared)}-{seconds_to_nice_format(q_first_appeared+q_duration)}'
-        response['read_appropiately'] = perc_script_missing<read_appropiately_threshold
+        response['read_appropiately'] = q_read_appropiately
 
         # if response['read_appropiately'] is False:
         response['perc_script_missing'] = perc_script_missing
@@ -366,6 +379,9 @@ class QuestionAnalyzer:
         response['q_and_ans_transcript'] = self.q_transcript
         response['answer_matches_surveycto'] = answer_matches_surveycto
         response['surveycto_answer'] = answer_analyzer.surveycto_answer
+        response['audio_path'] = self.survey_entrie_analyzer.audio_path
+        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
+        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
 
         print(f'Output: {response}')
         print("")
@@ -471,6 +487,10 @@ class SurveyEntrieAnalyzer:
     def __init__(self, audio_auditor, survey_row):
         self.survey_row = survey_row
         self.audio_auditor = audio_auditor
+        self.case_id = self.survey_row[audio_auditor.params['col_case_id']]
+        self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
+        self.text_audit_df = self.get_text_audit_df()
+        self.enumerator_id = self.survey_row[audio_auditor.params['col_enumerator_id']]
 
     def get_when_recording_starts(self):
         q_when_recording_starts_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['q_when_recording_starts']]
@@ -491,8 +511,8 @@ class SurveyEntrieAnalyzer:
         return True
 
     def get_text_audit_df(self):
-        text_audit_path = self.get_media_file_path(file_to_get = TEXT_AUDIT)
-        text_audit_df = pd.read_csv(text_audit_path)
+        self.text_audit_path = self.get_media_file_path(file_to_get = TEXT_AUDIT)
+        text_audit_df = pd.read_csv(self.text_audit_path)
         return text_audit_df
 
     def get_last_question_index(self):
@@ -527,7 +547,7 @@ class SurveyEntrieAnalyzer:
 
 
     def print_survey_info(self):
-        print(f"Case_id {self.survey_row[COL_CASEID]}")
+        print(f"case_id {self.survey_row[self.audio_auditor.params['col_case_id']]}")
         print(f"Text_audit {self.survey_row[self.audio_auditor.params['col_text_audit_path']]}")#
         # print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
         # print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
@@ -535,15 +555,15 @@ class SurveyEntrieAnalyzer:
 
     def analyze_audio_recording(self):
 
-        self.case_id = self.survey_row[COL_CASEID]
+
         self.print_survey_info()
 
-        self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
+
+
         if not self.audio_path_exists():
             return False
 
-        #Get text audit
-        self.text_audit_df = self.get_text_audit_df()
+
 
         #Lets cut down audios for each questions according to text-audits timeframes
 
