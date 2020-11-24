@@ -13,6 +13,11 @@ abbreviations = {
 transcripts_cache = None
 previous_transcription = None
 
+debugging = False
+def print_if_debugging(text):
+    if debugging:
+        print(text)
+
 def increase_sound_volume(sound, amount):
     return sound + amount
 
@@ -55,10 +60,10 @@ def get_first_appeared_and_duration(ta_row, first_q_offset=0, previous_ta_row=No
         next_q_first_appeared = next_ta_row['First appeared (seconds into survey)']-first_q_offset
 
         if next_q_first_appeared-q_first_appeared<q_duration and next_q_first_appeared!=q_first_appeared: #Be sure they dont have the same starting point (grouped questions)
-            print('fixing q duration!!!!!!!!!!!!!!!')
-            print(f'next_q_first_appeared {next_q_first_appeared}')
-            print(f'q_first_appeared {q_first_appeared}')
-            print(f'q_duration {q_duration}')
+            print_if_debugging('fixing q duration!!!!!!!!!!!!!!!')
+            print_if_debugging(f'next_q_first_appeared {next_q_first_appeared}')
+            print_if_debugging(f'q_first_appeared {q_first_appeared}')
+            print_if_debugging(f'q_duration {q_duration}')
 
             q_duration = next_q_first_appeared-q_first_appeared
 
@@ -76,7 +81,7 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
 
     #Check that file exists
     if not os.path.exists(audio_url):
-        print(f'{audio_url} does not exist')
+        print_if_debugging(f'{audio_url} does not exist')
         return False
 
     #Check if questions exist in transcript cache

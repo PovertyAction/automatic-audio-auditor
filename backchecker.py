@@ -19,10 +19,16 @@ SECOND_CONSENT = 'second_consent'
 FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
 
+
 # def alpha2digit(word, language)
 #     #replace 'una' for 'uno'
 #     word = word.replace('Una','Uno')
 #     return alpha2digit_native(word, language)
+
+debugging = False
+def print_if_debugging(text):
+    if debugging:
+        print(text)
 
 def import_data(dataset_path):
   if dataset_path.endswith('dta'):
@@ -80,7 +86,6 @@ def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check
         return lower_case
 
     last_x_words = " ".join([clean_word(s) for s in transcript.split(' ')[-amount_of_words_to_check:]])
-    # print(f'Last_x_words: {last_10_words}')
 
     #Check if any keyword is present in last 10 words
     for keyword in keywords:
@@ -113,51 +118,88 @@ class AnswerAnalyzer:
     def __init__(self, q_analyzer):
         self.q_analyzer = q_analyzer
 
+        #By default, we assume that responses come in the last phrase of the transcript
+        #Nonetheless, it sometimes happens that last phrase its just a confirmation of the surveyor after the respondents answer.
+        #We expect to identify this cases when the last 2 phrases of the transcript are very short
+        #Ex: ['Could you tell me if you are happy?', 'Yes', 'Thanks']
+        #So, what we will do is to concatenate the 2 last phrases if they are both short
+
+        last_phrase = q_analyzer.q_transcript[-1]
+
+        self.transcript_of_answer_only = last_phrase
+
+        #Capture second_last_phrase
+        if len(self.q_analyzer.q_transcript) > 1:
+            second_last_phrase = self.q_analyzer.q_transcript[-2]
+        else:
+            second_last_phrase = None
+
+        #Check if two last phrases are too short
+        if second_last_phrase and amount_of_words(last_phrase) <=2 and amount_of_words(second_last_phrase) <=3:
+            self.transcript_of_answer_only = second_last_phrase + " " + last_phrase
+
+
+        #If the question_transcript has too many phrases, it might be the case this questions contains other subquestions all toqueter (fsec3-fsec7 for example), and hence, the text_audit does not separate them, we cant do the answer analysis
+        if len(self.q_analyzer.q_transcript)>6:
+            self.transcript_has_too_many_phrases = True
+        else:
+            self.transcript_has_too_many_phrases = False
+
+
+        #If the amount of words in last phrase is too long, then we might be capturing the enumerator speaking and not the responden (we are missing the last interaction
+        if amount_of_words(last_phrase)>5:
+            self.last_phrase_too_many_words = True
+        else:
+            self.last_phrase_too_many_words = False
+
+
     def analyze_integer_response(self):
 
         def is_float(s):
             try:
                 float(s)
                 return True
-            except ValueError:
+            except:# ValueError:
                 return False
 
         def is_int(s):
             try:
                 int(s)
                 return True
-            except ValueError:
+            except:# ValueError:
                 return False
 
         if not is_int(self.surveycto_answer):
-            print(f'Surveycto answer not a num: {self.surveycto_answer}')
-            return None #or False?
+            return False, f'Surveycto answer not a num: {self.surveycto_answer}'
 
         #Lets look at last phrase in trascript and see if it has the survey_cto_answer
-        if str(int(self.surveycto_answer)) in self.q_analyzer.q_transcript[-1] or num2words(self.surveycto_answer, lang='esp') in self.q_analyzer.q_transcript[-1].lower():
-            return True
+        if str(int(self.surveycto_answer)) in self.transcript_of_answer_only:
+            return True, f'Found {self.surveycto_answer} in transcript'
+
+        if num2words(self.surveycto_answer, lang='esp') in self.transcript_of_answer_only.lower():
+            return True, f"Found {num2words(self.surveycto_answer, lang='esp')} in transcript"
 
         #Exceptional case for 'ningunx' or 'no'
-        elif int(self.surveycto_answer)==0 and \
-            ('ningun' in self.q_analyzer.q_transcript[-1].lower() or \
-            'no' in [w for w in self.q_analyzer.q_transcript[-1].lower().split(" ")]): #no is a word in the last phrase
-            return True
+        for string_that_represent_cero in ['ningun', 'no']:
+            if int(self.surveycto_answer)==0 and \
+            string_that_represent_cero in self.transcript_of_answer_only.lower().split(" "):
+                return True, f'{string_that_represent_cero} is associated to 0 and apppears in response'
 
         #Exceptional case for 'background noise
-        elif 'background' in self.q_analyzer.q_transcript[-1].lower():
-            return None
+        if 'background' in self.transcript_of_answer_only.lower().split(" "):
+            return None, "background noise in transcription, can't conclude"
 
         #Try to capture number from question_transcript, and check if its != to the one in surveycto
         #Capture numbers
         numeric_values_in_transcript = [int(float(alpha2digit(w,"es"))) \
-                                    for w in self.q_analyzer.q_transcript[-1].split(" ") \
+                                    for w in self.transcript_of_answer_only.split(" ") \
                                     if is_float(alpha2digit(w,"es"))]
         #Compare with surveycto answer
         if len(numeric_values_in_transcript)>0:
             if int(self.surveycto_answer)!=numeric_values_in_transcript[-1]:
-                return False
+                return False, f'Value {numeric_values_in_transcript[-1]} detected in answer, different to {int(self.surveycto_answer)}'
 
-        return None
+        return None, 'Could not conclude'
 
     def check_yes_no_recorded_in_surveycto(self, yes_or_no):
         if self.surveycto_answer in  self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['survey_cto_yes_no_values'][yes_or_no]:
@@ -194,46 +236,26 @@ class AnswerAnalyzer:
 
 
 
-        #If the question_transcript has too many phrases, it might be the case this questions contains other subquestions all toqueter (fsec3-fsec7 for example), and hence, the text_audit does not separate them, we cant do the analysis
-        if len(self.q_analyzer.q_transcript)>6:
-            return None
-
-        #We will look for a yes or no in last phrase of transcript
-        #Nonetheless, it sometimes happens that last phrase its just a confirmation of the surveyor for the respondents answer.
-        #So, what we will do is to concatenate 2 last phrases if they are both short
-        last_phrase = self.q_analyzer.q_transcript[-1]
-
-        if len(self.q_analyzer.q_transcript) >1:
-            second_last_phrase = self.q_analyzer.q_transcript[-2]
-        else:
-            second_last_phrase = None
-
-        if second_last_phrase and amount_of_words(last_phrase) <=2 and amount_of_words(second_last_phrase) <=3:
-            phrase_to_analyze = second_last_phrase + " " + last_phrase
-        else:
-            phrase_to_analyze = last_phrase
 
         #Correct answer imputed
-        #Check a yes was written in survey cto as is found in transcript
-        #Check a no was written in survey cto as is found in transcript
-        if (self.check_yes_no_recorded_in_surveycto('yes') and \
-            word_exists_in_cleaned_text(phrase_to_analyze, get_yes_string(language='es'))) or \
-           (self.check_yes_no_recorded_in_surveycto('no') and \
-            word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
-            return True
+        #Check a yes was written in surveycto and found in transcript, or
+        #Check a no was written in surveycto and found in transcript
+        for yes_or_no, get_yes_no_string_function in [('yes', get_yes_string),('no', get_no_string)]:
+            if self.check_yes_no_recorded_in_surveycto(yes_or_no) and \
+                word_exists_in_cleaned_text(self.transcript_of_answer_only, get_yes_no_string_function(language='es')):
+                return True, f"'{get_yes_no_string_function(language='es')}' found in transcript"
+
+        # if self.check_yes_no_recorded_in_surveycto('no') and \
+        #     word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
+        #     return True, f'{get_no_string(language='es')} found in transcript'
 
         #Wrong answer imputed
-        if (
-            self.check_yes_no_recorded_in_surveycto('no') and \
-                word_exists_in_cleaned_text(phrase_to_analyze, get_yes_string(language='es'))) or \
-           (self.check_yes_no_recorded_in_surveycto('yes') and \
-                word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
-            return False
+        for yes_or_no, get_yes_no_string_function in [('yes', get_no_string),('no', get_yes_string)]:
+            if self.check_yes_no_recorded_in_surveycto(yes_or_no) and \
+                word_exists_in_cleaned_text(self.transcript_of_answer_only, get_yes_no_string_function(language='es')):
+                return False, f"'{get_yes_no_string_function(language='es')}' found in transcript, but surveycto answer is {yes_or_no}"
 
-        print('Not being able to recognize answer for YES/NO question')
-        return None
-
-
+        return None, 'Not being able to recognize answer for YES/NO question'
 
     def get_surveycto_answer(self):
 
@@ -246,27 +268,28 @@ class AnswerAnalyzer:
     def check_answer_given_matches_surveycto(self):
 
         self.surveycto_answer = self.get_surveycto_answer()
+        print_if_debugging(f'surveycto_answer {self.surveycto_answer}')
 
-        #If last phrase of question_transcript is too long (has more than 5 words), then most probably we are missing the answer of respondent (last phrase is from surveyor)
-        if len(self.q_analyzer.q_transcript[-1].split(" ")) >5:
-            print('Couldnt capture respondets answer')
-            return None
+        if self.last_phrase_too_many_words:
+            return None, 'Last phrase in transcript contains too many words, so most probably its the enumerator speaker, aka, we couldnt capture respondent'
 
-        print(f'surveycto_answer {self.surveycto_answer}')
+        if self.transcript_has_too_many_phrases:
+            return None, 'Transcript has too many phrases, so there might be more than one question/answer here'
+
         if self.q_analyzer.q_type == 'integer':
-            return self.analyze_integer_response()
+            response, reason = self.analyze_integer_response()
 
         elif self.q_analyzer.q_type in self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['yes_no_question_types']:
-            return self.analyze_yes_no_response()
+            response, reason = self.analyze_yes_no_response()
+
+        else:
+            response, reason = None, f'{self.q_analyzer.q_type} not supported for answer analysis'
 
 
-        print(f'Answer analysis for q_type {self.q_analyzer.q_type} of question not implemented')
-        # print(question_type)
-        # print(question_code)
-        # print(question_transcript)
-        # print(surveycto_answer)
+        return response, reason
 
-        return None
+
+
 
 
 
@@ -295,12 +318,12 @@ class QuestionAnalyzer:
             self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
             self.q_code,
             'type')
-        print(f'q_type {self.q_type}')
+        print_if_debugging(f'q_type {self.q_type}')
 
 
         #Do not check notes nor checkpoints
         if  self.q_type == 'note' or 'checkpoint' in self.q_code:
-            print(f'Skipping question type {self.q_type}\n')
+            print_if_debugging(f'Skipping question type {self.q_type}\n')
             #Tell the transcript_generator to forget previous_transcript
             transcript_generator.previous_transcript_to_none()
             return
@@ -312,13 +335,13 @@ class QuestionAnalyzer:
             'label:spanish')
 
         if not self.q_script:
-            print(f"Didnt find question script for {self.q_code}")
+            print_if_debugging(f"Didnt find question script for {self.q_code}")
             return False
         if len(self.q_script.replace(" ", ""))==0:
-            print(f"No question transcript (usually question contianed only instructions for surveyor) for {self.q_code}")
+            print_if_debugging(f"No question transcript (usually question contianed only instructions for surveyor) for {self.q_code}")
             return False
 
-        print(f'question_script: {self.q_script}')
+        print_if_debugging(f'question_script: {self.q_script}')
         # print(f'len question_script: {len(self.q_script)}')
 
         self.q_transcript = \
@@ -334,10 +357,10 @@ class QuestionAnalyzer:
                 first_q_offset=self.survey_entrie_analyzer.start_recording_ta_offset)
 
         if not self.q_transcript:
-            print(f'Couldnt generate transcript for question {self.q_code}')
+            print_if_debugging(f'Couldnt generate transcript for question {self.q_code}')
             return False
 
-        print(f'transcript: {self.q_transcript}')
+        print_if_debugging(f'transcript: {self.q_transcript}')
 
         #Get % of script that was actually pronounced
         full_transcript = " ".join(self.q_transcript)
@@ -353,7 +376,7 @@ class QuestionAnalyzer:
 
         #Compare recorded response with surveycto saved response
         answer_analyzer = AnswerAnalyzer(self)
-        answer_matches_surveycto = answer_analyzer.check_answer_given_matches_surveycto()
+        answer_matches_surveycto, reason_for_no_match = answer_analyzer.check_answer_given_matches_surveycto()
 
         #Getting this again just to inlcude it in response
         q_first_appeared, q_duration = transcript_generator.get_first_appeared_and_duration(
@@ -378,12 +401,13 @@ class QuestionAnalyzer:
         response['q_script'] = self.q_script
         response['q_and_ans_transcript'] = self.q_transcript
         response['answer_matches_surveycto'] = answer_matches_surveycto
+        response['reason_for_no_match'] = reason_for_no_match
         response['surveycto_answer'] = answer_analyzer.surveycto_answer
         response['audio_path'] = self.survey_entrie_analyzer.audio_path
         response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
         response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
 
-        print(f'Output: {response}')
+        print(f"Output for {response['question']} ready")
         print("")
 
         return response
@@ -397,12 +421,12 @@ def process_consent_audio_audit(survey_part_to_process, survey_data, language, p
     survey_part_to_process)
 
     if(not audio_path):
-        print("No audio_path")
+        print_if_debugging("No audio_path")
         return False
 
     #Check audio exists
     if not os.path.exists(audio_path):
-        print(f"Audio {audio_path} does not exist")
+        print_if_debugging(f"Audio {audio_path} does not exist")
         return False
 
     transcript_sentences = transcript_generator.generate_transcript(audio_path, language)
@@ -500,12 +524,12 @@ class SurveyEntrieAnalyzer:
 
     def audio_path_exists(self):
         if(not self.audio_path):
-            print("No audio_path")
+            print_if_debugging("No audio_path")
             return False
 
         #Check audio exists
         if not os.path.exists(self.audio_path):
-            print(f"Audio {self.audio_path} does not exist")
+            print_if_debugging(f"Audio {self.audio_path} does not exist")
             return False
 
         return True
@@ -547,12 +571,14 @@ class SurveyEntrieAnalyzer:
 
 
     def print_survey_info(self):
+        print("********************************************************************")
         print(f"case_id {self.survey_row[self.audio_auditor.params['col_case_id']]}")
         print(f"Text_audit {self.survey_row[self.audio_auditor.params['col_text_audit_path']]}")#
         # print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
         # print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
         print(f"Full survey {self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]}")
-
+        print("********************************************************************")
+        
     def analyze_audio_recording(self):
 
 
