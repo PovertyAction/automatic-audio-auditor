@@ -9,26 +9,45 @@ import text_differences
 import questionnaire_texts
 import aa_params
 
-from columns_specifications import *
 import time
 from num2words import num2words
-from text_to_num import alpha2digit# as alpha2digit_native
+from text_to_num import alpha2digit
 
+#Some string constants used along the code
 FIRST_CONSENT = 'first_consent'
 SECOND_CONSENT = 'second_consent'
 FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
 
 
-# def alpha2digit(word, language)
-#     #replace 'una' for 'uno'
-#     word = word.replace('Una','Uno')
-#     return alpha2digit_native(word, language)
-
 debugging = False
 def print_if_debugging(text):
     if debugging:
         print(text)
+
+def get_yes_keywords(full_language):
+    '''
+    Depending on language, return all words that relate to 'yes'
+    '''
+#--->Should move this function to a separate file
+    language = full_language.split('-')[0]
+    if language == 'es':
+        return ['si','sí','bueno','ok', 'estoy de acuerdo', 'estoy deacuardo']
+    elif language == 'en':
+        return ['yes', 'ok']
+    else:
+        return None
+
+
+def amount_of_words(phrase):
+    if phrase:
+        return len(phrase.split(' '))
+    else:
+        return False
+
+def seconds_to_nice_format(time_in_seconds):
+    time_nice_format = time.strftime('%M:%S', time.gmtime(time_in_seconds))
+    return time_nice_format
 
 def remove_accents(word):
     for a,b in [('á','a'),('é','e'),('í','i'),('ó','o'),('ú','u')]:
@@ -41,11 +60,7 @@ def remove_punctuations(word):
 def import_data(dataset_path):
   if dataset_path.endswith('dta'):
 
-      #We might want to do conver_categoricals=True to directly compare transcript answers with surveycto answers
-    # try:
-    #     dataset = pd.read_stata(dataset_path)
-    # except ValueError:
-    #     print('EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE')
+    #We might want to do conver_categoricals=True to directly compare transcript answers with surveycto answers
     dataset = pd.read_stata(dataset_path, convert_categoricals=False)
 
     label_dict = pd.io.stata.StataReader(dataset_path).variable_labels()
@@ -57,75 +72,11 @@ def import_data(dataset_path):
 
     return dataset, label_dict, value_label_dict
 
-
-
-def get_yes_keywords(full_language):
-    language = full_language.split('-')[0]
-    if language == 'es':
-        return ['si','sí','bueno','ok', 'estoy de acuerdo', 'estoy deacuardo']
-    elif language == 'en':
-        return ['yes', 'ok']
-    else:
-        return None
-
-def check_if_respondent_acceptance_is_present(transcript, language):
-    yes_keywords = get_yes_keywords(language)
-    return check_if_keywords_are_present(transcript, yes_keywords)
-
-def check_if_participation_consent_question_is_present(transcript, language):
-    consent_keywords = ['participar', 'contestar']
-    return check_if_keywords_are_present(transcript, consent_keywords)
-
-def check_if_recording_consent_question_is_present(transcript, language):
-    recording_keywords = ['grabar', 'grabemos', 'grabe', 'grabada']
-    return check_if_keywords_are_present(transcript, recording_keywords)
-
-def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check = 20):
-    #Check if any of keywords is present in any of the last x words of the transcript
-    #x depending what part of survey are we checking
-
-
-
-    #Clean last x words
-    exclude = set(string.punctuation)
-    def clean_word(word):
-        no_punctuation = ''.join(ch for ch in word if ch not in exclude)
-        lower_case = no_punctuation.lower()
-        return lower_case
-
-    last_x_words = " ".join([clean_word(s) for s in transcript.split(' ')[-amount_of_words_to_check:]])
-
-    #Check if any keyword is present in last 10 words
-    for keyword in keywords:
-        if keyword in last_x_words:
-            return True
-    return False
-
-
-
-
-
-
-
-
-
-
-
-def amount_of_words(phrase):
-    if phrase:
-        return len(phrase.split(' '))
-    else:
-        return False
-
-
-
-
-
-
 class AnswerAnalyzer:
     def __init__(self, q_analyzer):
         self.q_analyzer = q_analyzer
 
+        #Questions transcripts are a list of phrases.
         #By default, we assume that responses come in the last phrase of the transcript
         #Nonetheless, it sometimes happens that last phrase its just a confirmation of the surveyor after the respondents answer.
         #We expect to identify this cases when the last 2 phrases of the transcript are very short
@@ -149,30 +100,29 @@ class AnswerAnalyzer:
                 second_last_phrase = self.q_analyzer.q_transcript[-2]
                 third_last_phrase = self.q_analyzer.q_transcript[-3]
             return third_last_phrase, second_last_phrase, last_phrase
-
-        third_last_phrase, second_last_phrase, last_phrase = get_last_3_phrases()
+        self.third_last_phrase, self.second_last_phrase, self.last_phrase = get_last_3_phrases()
 
         def get_transcript_of_answer_only():
 
             #Default is to use only last phrase
-            transcript_of_answer_only = last_phrase
+            transcript_of_answer_only = self.last_phrase
 
             #If last phrase is short, as well as previous two, join them all.
-            if third_last_phrase and amount_of_words(third_last_phrase) <=3 and \
-             second_last_phrase and amount_of_words(second_last_phrase) <=3 and \
-             amount_of_words(last_phrase) <=3:
-                transcript_of_answer_only = " ".join([third_last_phrase, second_last_phrase, last_phrase])
+            if self.third_last_phrase and amount_of_words(self.third_last_phrase) <=3 and \
+             self.second_last_phrase and amount_of_words(self.second_last_phrase) <=3 and \
+             amount_of_words(self.last_phrase) <=3:
+                transcript_of_answer_only = " ".join([self.third_last_phrase, self.second_last_phrase, self.last_phrase])
 
             #If last phrase is short, as well as previous one, join them
-            elif second_last_phrase and amount_of_words(second_last_phrase) <=3 and \
-             amount_of_words(last_phrase) <=3:
-                transcript_of_answer_only = " ".join([second_last_phrase, last_phrase])
+            elif self.second_last_phrase and amount_of_words(self.second_last_phrase) <=3 and \
+             amount_of_words(self.last_phrase) <=3:
+                transcript_of_answer_only = " ".join([self.second_last_phrase, self.last_phrase])
 
             #if last_phrase is extremelly short, then be more flexible with using latter even if they are longer than 3 (say max 6 words)
             #Ex: ['¿En los últimos 7 días usted realizó alguna otra actividad para generar ingresos o manejò su propio negocio?', 'Pues no porque no tengo nada.', 'Bueno.']
-            elif second_last_phrase and amount_of_words(second_last_phrase) <=6 and \
-             amount_of_words(last_phrase) == 1:
-                transcript_of_answer_only = " ".join([second_last_phrase, last_phrase])
+            elif self.second_last_phrase and amount_of_words(self.second_last_phrase) <=6 and \
+             amount_of_words(self.last_phrase) == 1:
+                transcript_of_answer_only = " ".join([self.second_last_phrase, self.last_phrase])
 
             #Lastly, we clean transcript of answer so as to remove punctuations and make it more easy to find words
             transcript_of_answer_only = remove_punctuations(transcript_of_answer_only)
@@ -182,14 +132,14 @@ class AnswerAnalyzer:
 
 
 
-    def transcript_has_too_many_phrases(self):
-        if len(self.q_analyzer.q_transcript)>6:
+    def transcript_has_too_many_phrases(self, threshold=6):
+        if len(self.q_analyzer.q_transcript)>threshold:
             return True
         else:
             return False
 
-    def last_phrase_too_many_words(self):
-        if amount_of_words(self.q_analyzer.q_transcript[-1])>5:
+    def last_phrase_too_many_words(self, threshold=5):
+        if amount_of_words(self.q_analyzer.q_transcript[-1])>threshold:
             return True
         else:
             return False
@@ -201,49 +151,55 @@ class AnswerAnalyzer:
             try:
                 float(s)
                 return True
-            except:# ValueError:
+            except:
                 return False
 
         def is_int(s):
             try:
                 int(s)
                 return True
-            except:# ValueError:
+            except:
                 return False
 
         if not is_int(self.surveycto_answer):
             return False, f'Surveycto answer not a num: {self.surveycto_answer}'
 
+        #CASE CORRECT INTEGER WAS RECORDED
         #Lets look at last phrase in trascript and see if it has the survey_cto_answer
+        #We first check if number in digits is present
         if str(int(self.surveycto_answer)) in self.transcript_of_answer_only:
             return True, f'Found {self.surveycto_answer} in transcript'
-
+        #We then check if number in words is present
         if num2words(self.surveycto_answer, lang='esp') in self.transcript_of_answer_only.lower():
             return True, f"Found {num2words(self.surveycto_answer, lang='esp')} in transcript"
 
-        #Exceptional case for 'ningunx' or 'no'
+        #We check if words that reprsent 0 are present
         for string_that_represent_cero in ['ningun', 'no']:
             if int(self.surveycto_answer)==0 and \
             string_that_represent_cero in self.transcript_of_answer_only.lower().split(" "):
                 return True, f"'{string_that_represent_cero}' is associated to 0 and apppears in response"
 
-        #Exceptional case for 'background noise
-        if 'background' in self.transcript_of_answer_only.lower().split(" "):
-            return None, "background noise in transcription, can't conclude"
-
-        #Try to capture number from question_transcript, and check if its != to the one in surveycto
-        #Capture numbers
+        #Try to capture if any number where present as words in question_transcript, and check if its != to the one in surveycto
+        #Create list of integers we can find in transcript
         numeric_values_in_transcript = [int(float(alpha2digit(w,"es"))) \
                                     for w in self.transcript_of_answer_only.split(" ") \
                                     if is_float(alpha2digit(w,"es"))]
-        #Compare with surveycto answer
+
+        #Compare digits found with surveycto answer
         if len(numeric_values_in_transcript)>0:
             if int(self.surveycto_answer)!=numeric_values_in_transcript[-1]:
                 return False, f'Value {numeric_values_in_transcript[-1]} detected in answer, different to {int(self.surveycto_answer)}'
+            else:
+                return True, f'Value {numeric_values_in_transcript[-1]} detected in answer'
+
+        #Check if there is presence of background noise
+        if 'background' in self.transcript_of_answer_only.lower().split(" "):
+            return None, "background noise in transcription, can't conclude"
 
         return None, 'Could not conclude'
 
     def check_yes_no_recorded_in_surveycto(self, yes_or_no):
+        #Check if a 'yes' or a 'no' (whatever value comes in the yes_or_no var) is the one saved in surveycto
         if self.surveycto_answer in  self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['survey_cto_yes_no_values'][yes_or_no]:
             return True
         else:
@@ -252,6 +208,7 @@ class AnswerAnalyzer:
     def analyze_yes_no_response(self):
 
         def find_any_of_words_in_text(text, words_to_check):
+            #Check if any of the words present in words_to_check can be found in text
 
             clean_text = remove_accents(text)
             clean_text = remove_punctuations(clean_text)
@@ -273,21 +230,17 @@ class AnswerAnalyzer:
                 return ['si', 'correcto']
             return False
 
-
-
-
         #Correct answer imputed
-        #Check a yes was written in surveycto and found in transcript, or
-        #Check a no was written in surveycto and found in transcript
+        #Check a 'yes' was written in surveycto and found in transcript, or
+        #Check a 'no' was written in surveycto and found in transcript
+
+#--->Variable names here are horrible, need to change this
         for yes_or_no, get_yes_no_strings in [('yes', get_yes_strings),('no', get_no_strings)]:
             if self.check_yes_no_recorded_in_surveycto(yes_or_no):
                 yes_no_word_found = find_any_of_words_in_text(self.transcript_of_answer_only, get_yes_no_strings(language='es'))
                 if yes_no_word_found:
                     return True, f"'{yes_no_word_found}' found in transcript"
 
-        # if self.check_yes_no_recorded_in_surveycto('no') and \
-        #     word_exists_in_cleaned_text(phrase_to_analyze, get_no_string(language='es'))):
-        #     return True, f'{get_no_string(language='es')} found in transcript'
 
         #Wrong answer imputed
         for yes_or_no, get_yes_no_strings in [('yes', get_no_strings),('no', get_yes_strings)]:
@@ -311,7 +264,6 @@ class AnswerAnalyzer:
         self.surveycto_answer = self.get_surveycto_answer()
         print_if_debugging(f'surveycto_answer {self.surveycto_answer}')
 
-
         #If the amount of words in last phrase is too long, then we might be capturing the enumerator speaking and not the responden (we are missing the last interaction
         if self.last_phrase_too_many_words():
             return None, 'Last phrase in transcript contains too many words, so most probably its the enumerator speaking, aka, we couldnt capture respondent'
@@ -329,20 +281,7 @@ class AnswerAnalyzer:
         else:
             response, reason = None, f'{self.q_analyzer.q_type} not supported for answer analysis'
 
-
         return response, reason
-
-
-
-
-
-
-
-
-
-def seconds_to_nice_format(time_in_seconds):
-    time_nice_format = time.strftime('%M:%S', time.gmtime(time_in_seconds))
-    return time_nice_format
 
 class QuestionAnalyzer:
     def __init__(self, ta_row, previous_ta_row, next_ta_row, survey_entrie_analyzer):
@@ -350,6 +289,30 @@ class QuestionAnalyzer:
         self.previous_ta_row = previous_ta_row
         self.next_ta_row = next_ta_row
         self.survey_entrie_analyzer = survey_entrie_analyzer
+
+
+    def create_response_dict(self, answer_analyzer):
+        response = {}
+        response['enum_id'] = self.survey_entrie_analyzer.enumerator_id
+        response['case_id'] = self.survey_entrie_analyzer.case_id
+        response['question'] = self.q_code
+        response['time_in_audio'] = \
+            f'{seconds_to_nice_format(self.q_first_appeared)}-{seconds_to_nice_format(self.q_first_appeared+self.q_duration)}'
+        response['read_appropiately'] = self.q_read_appropiately
+
+        # if response['read_appropiately'] is False:
+        response['perc_script_missing'] = self.perc_script_missing
+        response['q_words_missing'] = self.words_missing
+        response['q_script'] = self.q_script
+        response['q_and_ans_transcript'] = self.q_transcript
+        response['answer_matches_surveycto'] = answer_analyzer.answer_matches_surveycto
+        response['reason_for_match'] = answer_analyzer.reason_for_match
+        response['surveycto_answer'] = answer_analyzer.surveycto_answer
+        response['audio_path'] = self.survey_entrie_analyzer.audio_path
+        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
+        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
+
+        return response
 
     def analyze_survey_question(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55):
 
@@ -408,56 +371,238 @@ class QuestionAnalyzer:
 
         #Get % of script that was actually pronounced
         full_transcript = " ".join(self.q_transcript)
-        perc_script_missing, words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
+        self.perc_script_missing, self.words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
 
         #Question is read appropiately as long as the percentage of words missing from script is lower than thrshold.
         #For very short question scripts (below 4 words), we reduce threshold
         if len(self.q_script.split(" "))<=3:
             read_appropiately_threshold = read_appropiately_threshold_short_questions
-
-        q_read_appropiately = perc_script_missing<read_appropiately_threshold
-
+        self.q_read_appropiately = self.perc_script_missing<read_appropiately_threshold
 
         #Compare recorded response with surveycto saved response
         answer_analyzer = AnswerAnalyzer(self)
-        answer_matches_surveycto, reason_for_match = answer_analyzer.check_answer_given_matches_surveycto()
+        answer_analyzer.answer_matches_surveycto, answer_analyzer.reason_for_match = answer_analyzer.check_answer_given_matches_surveycto()
 
         #Getting this again just to inlcude it in response
-        q_first_appeared, q_duration = transcript_generator.get_first_appeared_and_duration(
+        self.q_first_appeared, self.q_duration = transcript_generator.get_first_appeared_and_duration(
         ta_row=self.ta_row, previous_ta_row=self.previous_ta_row, first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset)
 
-        #
-
-
-
         #Prepare response dict
-        response = {}
-        response['enum_id'] = self.survey_entrie_analyzer.enumerator_id
-        response['case_id'] = self.survey_entrie_analyzer.case_id
-        response['question'] = self.q_code
-        response['time_in_audio'] = \
-            f'{seconds_to_nice_format(q_first_appeared)}-{seconds_to_nice_format(q_first_appeared+q_duration)}'
-        response['read_appropiately'] = q_read_appropiately
+        response = self.create_response_dict(answer_analyzer)
 
-        # if response['read_appropiately'] is False:
-        response['perc_script_missing'] = perc_script_missing
-        response['q_words_missing'] = words_missing
-        response['q_script'] = self.q_script
-        response['q_and_ans_transcript'] = self.q_transcript
-        response['answer_matches_surveycto'] = answer_matches_surveycto
-        response['reason_for_match'] = reason_for_match
-        response['surveycto_answer'] = answer_analyzer.surveycto_answer
-        response['audio_path'] = self.survey_entrie_analyzer.audio_path
-        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
-        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
-
-        print(f"Output for {response['question']} ready")
-        print("")
+        print(f"Output for {response['question']} ready\n")
 
         return response
 
+class SurveyEntrieAnalyzer:
+    def __init__(self, audio_auditor, survey_row):
+        self.survey_row = survey_row
+        self.audio_auditor = audio_auditor
+        self.case_id = self.survey_row[audio_auditor.params['col_case_id']]
+        self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
+        self.text_audit_df = self.get_text_audit_df()
+        self.enumerator_id = self.survey_row[audio_auditor.params['col_enumerator_id']]
+
+    def get_when_recording_starts(self):
+        q_when_recording_starts_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['q_when_recording_starts']]
+        start_recording_ta_index = int(q_when_recording_starts_df.index[0])
+        start_recording_ta_offset = int(q_when_recording_starts_df['First appeared (seconds into survey)'].iloc[0])
+        return start_recording_ta_index, start_recording_ta_offset
+
+    def audio_path_exists(self):
+        if(not self.audio_path):
+            print_if_debugging("No audio_path")
+            return False
+
+        #Check audio exists
+        if not os.path.exists(self.audio_path):
+            print_if_debugging(f"Audio {self.audio_path} does not exist")
+            return False
+
+        return True
+
+    def get_text_audit_df(self):
+        self.text_audit_path = self.get_media_file_path(file_to_get = TEXT_AUDIT)
+        text_audit_df = pd.read_csv(self.text_audit_path)
+        return text_audit_df
+
+    def get_last_question_index(self):
+        last_q_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['last_question']]
+        last_question_index = int(last_q_df.index[0])
+        return last_question_index
+
+    def get_media_file_path(self, file_to_get):
+
+        if(file_to_get == FULL_SURVEY):
+            path = self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]
+
+        elif(file_to_get == TEXT_AUDIT):
+            path = self.survey_row[self.audio_auditor.params['col_text_audit_path']]
+
+        #Return False if path is empty
+        if path=='':
+            return False
+
+        #Path at the moment has format:
+        #media\\AA_001df0ef-acdb-4228-8686-9137d8ae0e27-audio_audit_cons_c_call_phone.m4a'
+        #Remove media\\ and add directory
+        path_cleaned = path.split('\\')[1]
+
+        full_path = os.path.join(self.audio_auditor.params['media_folder_path'], path_cleaned)
+
+        return full_path
 
 
+
+    def print_survey_info(self):
+        print("********************************************************************")
+        print(f"case_id {self.survey_row[self.audio_auditor.params['col_case_id']]}")
+        print(f"Text_audit {self.survey_row[self.audio_auditor.params['col_text_audit_path']]}")#
+        # print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
+        # print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
+        print(f"Full survey {self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]}")
+        print("********************************************************************")
+
+    def analyze_audio_recording(self):
+
+        self.print_survey_info()
+
+        if not self.audio_path_exists():
+            return False
+
+        #Lets cut down audios for each questions according to text-audits timeframes
+
+        #Text audit capture segments of the interview that are not recorded, particularly the first ones that has surveycto metadata
+        #We need to learn when does the recording start, and ends, relative to the beggining of the text audit
+        start_recording_ta_index, self.start_recording_ta_offset = self.get_when_recording_starts()
+        last_question_index = self.get_last_question_index()
+
+        #Now we analyze each question, looping over the text audit entries
+        q_results = []
+        previous_ta_row = None
+        next_ta_row = None
+        for index, ta_row in self.text_audit_df.iterrows():
+
+            #Skip initial part of text audit which are not related to questions
+            if(index<start_recording_ta_index or index > last_question_index):
+                continue
+
+            next_ta_row = self.text_audit_df.iloc[index+1]
+
+            q_analyzer = QuestionAnalyzer(ta_row, previous_ta_row, next_ta_row, self)
+
+            q_analysis_result = q_analyzer.analyze_survey_question()
+            if q_analysis_result:
+                q_results.append(q_analysis_result)
+
+            #Keep record of last row
+            previous_ta_row = ta_row
+
+        #Save results in a .csv
+        if len(q_results)>0:
+            results_df = pd.DataFrame()
+            results_df = results_df.append(q_results, ignore_index=True)
+            results_df.to_csv(self.case_id+'_results.csv', index=False)
+
+        print("")
+        return q_results
+
+class AudioAuditor:
+    def __init__(self, name):
+        self.params = aa_params.get_project_params(name)
+
+    def get_completed_surveys(self, surveys_df):
+
+        #Filter to get only completed surveys
+        completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
+
+        #Filter to get surveys with submissiondates after launch day
+        if self.params['project_name'] == 'RECOVER_RD3_COL':
+            completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
+
+        #Rest index of new df
+        completed_surveys_df.reset_index(drop=True, inplace=True)
+
+        return completed_surveys_df
+
+    def run_audio_audit(self):
+        '''
+        Given audio audits and a questionaire, it checks if the questions and
+        consenst were appropiately delivered, and if answers were appropiately
+        recorded
+        '''
+        #Load survey data
+        surveys_df, self.survey_label_dict, self.survey_value_label_dict = import_data(self.params['survey_df_path'])
+
+        #Loas questionnaire
+        self.questionnaire_df = pd.read_excel(self.params['questionnaire_path'])
+
+        #Get survey attempts that where completed
+        self.completed_surveys_df = self.get_completed_surveys(surveys_df)
+
+        n_rows_to_process = self.completed_surveys_df.shape[0]
+
+        # report = []
+
+        #Analyze each survey
+        for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).iterrows():
+
+            survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
+            results = survey_response_analyzer.analyze_audio_recording()
+
+            #Create report of errors
+            # add_results_to_report(results, row)
+
+if __name__=='__main__':
+
+    projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
+
+    project_name = projects_ids_to_names[sys.argv[1]]
+    print(project_name)
+
+    audio_auditor = AudioAuditor(project_name)
+
+    audio_auditor.run_audio_audit()
+
+
+'''
+# Deprecated code.
+
+## To generate aggregated reports.
+
+def add_results_to_report(results, row, words_missing_rate_threshold = 0.3):
+    for result in results: #One result for each part of survey
+        print_result = False
+
+        #Check that consent was read approximately completely
+        if result['custom_difference_measure'] > words_missing_rate_threshold:
+            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: {int(result['custom_difference_measure']*100)}% of consent script is missing")
+            log_and_print(" ".join(result['transcript_sentences']))
+            print_result=True
+
+        #Check that consent questions are present
+        if result['participation_concent_question_present'] is False:
+            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked participation consent question")
+            log_and_print(" ".join(result['transcript_sentences'][-4:]))
+            print_result=True
+
+        if result['recording_concent_question_present'] is False:
+            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked recording consent question")
+            log_and_print(" ".join(result['transcript_sentences'][-4:]))
+            print_result=True
+
+        #Check acceptance to consent is present
+        if result['acceptance_present'] is False:
+            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Respondent acceptance to consent might not be present")
+            log_and_print(" ".join(result['transcript_sentences'][-4:]))
+            print_result=True
+
+        if print_result:
+            print(f"Consent audio path: {result['audio_path']}")
+            print(f'Full survey audio path: {row[COL_FULL_SURVEY_AUDIO_AUDIT_PATH]}')
+            print("////////////////////////////////////////////")
+
+## Used in RD1 RECOVR COL to analyze consents. Should not be needed in other project.
 
 def process_consent_audio_audit(survey_part_to_process, survey_data, language, path_to_audio_audits_dir, read_appropiately_threshold=0.3):
 
@@ -515,216 +660,33 @@ def process_consent_audio_audit(survey_part_to_process, survey_data, language, p
     return return_dict
 
 
-
-
-
-
-def add_results_to_report(results, row, words_missing_rate_threshold = 0.3):
-    for result in results: #One result for each part of survey
-        print_result = False
-
-        #Check that consent was read approximately completely
-        if result['custom_difference_measure'] > words_missing_rate_threshold:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: {int(result['custom_difference_measure']*100)}% of consent script is missing")
-            log_and_print(" ".join(result['transcript_sentences']))
-            print_result=True
-
-        #Check that consent questions are present
-        if result['participation_concent_question_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked participation consent question")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        if result['recording_concent_question_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked recording consent question")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        #Check acceptance to consent is present
-        if result['acceptance_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Respondent acceptance to consent might not be present")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        if print_result:
-            print(f"Consent audio path: {result['audio_path']}")
-            print(f'Full survey audio path: {row[COL_FULL_SURVEY_AUDIO_AUDIT_PATH]}')
-            print("////////////////////////////////////////////")
-
-class SurveyEntrieAnalyzer:
-    def __init__(self, audio_auditor, survey_row):
-        self.survey_row = survey_row
-        self.audio_auditor = audio_auditor
-        self.case_id = self.survey_row[audio_auditor.params['col_case_id']]
-        self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
-        self.text_audit_df = self.get_text_audit_df()
-        self.enumerator_id = self.survey_row[audio_auditor.params['col_enumerator_id']]
-
-    def get_when_recording_starts(self):
-        q_when_recording_starts_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['q_when_recording_starts']]
-        start_recording_ta_index = int(q_when_recording_starts_df.index[0])
-        start_recording_ta_offset = int(q_when_recording_starts_df['First appeared (seconds into survey)'].iloc[0])
-        return start_recording_ta_index, start_recording_ta_offset
-
-    def audio_path_exists(self):
-        if(not self.audio_path):
-            print_if_debugging("No audio_path")
-            return False
-
-        #Check audio exists
-        if not os.path.exists(self.audio_path):
-            print_if_debugging(f"Audio {self.audio_path} does not exist")
-            return False
-
-        return True
-
-    def get_text_audit_df(self):
-        self.text_audit_path = self.get_media_file_path(file_to_get = TEXT_AUDIT)
-        text_audit_df = pd.read_csv(self.text_audit_path)
-        return text_audit_df
-
-    def get_last_question_index(self):
-        last_q_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['last_question']]
-        last_question_index = int(last_q_df.index[0])
-        return last_question_index
-
-
-
-
-    def get_media_file_path(self, file_to_get):
-
-        if(file_to_get == FULL_SURVEY):
-            path = self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]
-
-        elif(file_to_get == TEXT_AUDIT):
-            path = self.survey_row[self.audio_auditor.params['col_text_audit_path']]
-
-        #Return False if path is empty
-        if path=='':
-            return False
-
-        #Path at the moment has format:
-        #media\\AA_001df0ef-acdb-4228-8686-9137d8ae0e27-audio_audit_cons_c_call_phone.m4a'
-        #Remove media\\ and add directory
-        path_cleaned = path.split('\\')[1]
-
-        full_path = os.path.join(self.audio_auditor.params['media_folder_path'], path_cleaned)
-
-        return full_path
-
-
-
-    def print_survey_info(self):
-        print("********************************************************************")
-        print(f"case_id {self.survey_row[self.audio_auditor.params['col_case_id']]}")
-        print(f"Text_audit {self.survey_row[self.audio_auditor.params['col_text_audit_path']]}")#
-        # print(f"Firt consent {self.survey_row[COL_FIRST_CONSENT_AUDIO_AUDIT_PATH]}")
-        # print(f"Second consent {self.survey_row[COL_SECOND_CONSENT_AUDIO_AUDIT_PATH]}")
-        print(f"Full survey {self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]}")
-        print("********************************************************************")
-
-    def analyze_audio_recording(self):
-
-
-        self.print_survey_info()
-
-
-
-        if not self.audio_path_exists():
-            return False
-
-
-
-        #Lets cut down audios for each questions according to text-audits timeframes
-
-        #Text audit capture segments of the interview that are not recorded, particularly the first ones that has surveycto metadata
-        #We need to learn when does the recording start, and ends, relative to the beggining of the text audit
-        start_recording_ta_index, self.start_recording_ta_offset = self.get_when_recording_starts()
-        last_question_index = self.get_last_question_index()
-
-        #Now we analyze each question, looping over the text audit entries
-        q_results = []
-        previous_ta_row = None
-        next_ta_row = None
-        for index, ta_row in self.text_audit_df.iterrows():
-
-            #Skip initial part of text audit which are not related to questions
-            if(index<start_recording_ta_index or index > last_question_index):
-                continue
-
-            next_ta_row = self.text_audit_df.iloc[index+1]
-
-            q_analyzer = QuestionAnalyzer(ta_row, previous_ta_row, next_ta_row, self)
-
-            q_analysis_result = q_analyzer.analyze_survey_question()
-            if q_analysis_result:
-                q_results.append(q_analysis_result)
-
-            #Keep record of last row
-            previous_ta_row = ta_row
-
-        #Save results in a .csv
-        if len(q_results)>0:
-            results_df = pd.DataFrame()#columns=['question', 'time_in_audio','read_appropiately', 'perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script'])
-            results_df = results_df.append(q_results, ignore_index=True)
-            results_df.to_csv(self.case_id+'_results.csv', index=False)
-
-        print("")
-        return q_results
-
-
-class AudioAuditor:
-    def __init__(self, name):
-        self.params = aa_params.get_project_params(name)
-
-    def get_completed_surveys(self, surveys_df):
-
-        #Filter to get only completed surveys
-        completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
-
-        #Filter to get surveys with submissiondates after launch day
-        if self.params['project_name'] == 'RECOVER_RD3_COL':
-            completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
-
-        #Rest index of new df
-        completed_surveys_df.reset_index(drop=True, inplace=True)
-        return completed_surveys_df
-
-    def run_audio_audit(self):
-        '''
-        Given audio audits and a questionaire, it checks if the questions and
-        consenst were appropiately delivered, and if answers were appropiately
-        recorded
-        '''
-        #Load survey data
-        surveys_df, self.survey_label_dict, self.survey_value_label_dict = import_data(self.params['survey_df_path'])
-
-        #Loas questionnaire
-        self.questionnaire_df = pd.read_excel(self.params['questionnaire_path'])
-
-        #Get survey attempts that where completed
-        self.completed_surveys_df = self.get_completed_surveys(surveys_df)
-
-        n_rows_to_process = self.completed_surveys_df.shape[0]
-
-        # report = []
-
-        #Analyze each survey
-        for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).iterrows():
-
-            survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
-            results = survey_response_analyzer.analyze_audio_recording()
-
-            #Create report of errors
-            # add_results_to_report(results, row)
-
-if __name__=='__main__':
-
-    projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
-
-    project_name = projects_ids_to_names[sys.argv[1]]
-    print(project_name)
-
-    audio_auditor = AudioAuditor(project_name)
-
-    audio_auditor.run_audio_audit()
+def check_if_respondent_acceptance_is_present(transcript, language):
+    yes_keywords = get_yes_keywords(language)
+    return check_if_keywords_are_present(transcript, yes_keywords)
+
+def check_if_participation_consent_question_is_present(transcript, language):
+    consent_keywords = ['participar', 'contestar']
+    return check_if_keywords_are_present(transcript, consent_keywords)
+
+def check_if_recording_consent_question_is_present(transcript, language):
+    recording_keywords = ['grabar', 'grabemos', 'grabe', 'grabada']
+    return check_if_keywords_are_present(transcript, recording_keywords)
+
+def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check = 20):
+    #Check if any of keywords is present in any of the last x words of the transcript
+    #x depending what part of survey are we checking
+    #Clean last x words
+    exclude = set(string.punctuation)
+    def clean_word(word):
+        no_punctuation = ''.join(ch for ch in word if ch not in exclude)
+        lower_case = no_punctuation.lower()
+        return lower_case
+
+    last_x_words = " ".join([clean_word(s) for s in transcript.split(' ')[-amount_of_words_to_check:]])
+
+    #Check if any keyword is present in last 10 words
+    for keyword in keywords:
+        if keyword in last_x_words:
+            return True
+    return False
+'''
