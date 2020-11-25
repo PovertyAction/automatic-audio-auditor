@@ -98,6 +98,8 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
             print('Using previous transcription')
             return previous_transcription
 
+    print(f'Generating transcript for {project_name} {case_id} {q_code}')
+
     #Get offset and duration fo question in audio record
     offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
 

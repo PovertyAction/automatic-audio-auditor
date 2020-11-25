@@ -28,10 +28,13 @@ def remove_stopwords(text, full_language):
     text_without_stopwords = [w for w in text if w not in stopwords]
     return text_without_stopwords
 
-def compute_perc_script_missing(orgininal_script, transcript, language):
+def compute_perc_script_missing(original_script, transcript, language):
     '''
-    Check how much of orgininal_script is missing in transcript. Clean and remove stopwords
+    Check how much of original_script is missing in transcript. Clean and remove stopwords
     '''
+    # print(original_script)
+    # print(transcript)
+
     cleaning = jiwer.Compose([
         jiwer.SubstituteRegexes({"¡": "", "¿":"", "á": "a", "é": "e", "í": "i", "ó": "o","ú": "u"}),
         jiwer.SubstituteWords({ "tardes": "dias",
@@ -52,23 +55,27 @@ def compute_perc_script_missing(orgininal_script, transcript, language):
     ])
 
     #Remove anything between ${variable} from original_script
-    orgininal_script_transformed = re.sub(r'\${.*?\}','',orgininal_script)
-
+    original_script_transformed = re.sub(r'\${.*?\}','',original_script)
+    # print(original_script_transformed)
     #Clean both
-    orgininal_script_transformed = cleaning(orgininal_script_transformed)
+    original_script_transformed = cleaning(original_script_transformed)
     transcript_transformed = cleaning(transcript)
+    # print(original_script_transformed)
+
 
     #Remove stopwords from original_script
-    orgininal_script_transformed = remove_stopwords(orgininal_script_transformed, language)
+    original_script_transformed_no_stopwords = remove_stopwords(original_script_transformed, language)
+    if len(original_script_transformed_no_stopwords) != 0: #Sometimes removing stopwords removes all words from script
+        original_script_transformed = original_script_transformed_no_stopwords
 
     #Lemmatize transcript
     stemmer = get_stemmer(language)
     transcript_transformed_stem = [stemmer.stem(word) for word in transcript_transformed]
 
-    #Get words form orgininal_script_transformed whose stem is not in transcript_transformed_stem
-    words_missing = [word for word in orgininal_script_transformed if stemmer.stem(word) not in transcript_transformed_stem]
+    #Get words form original_script_transformed whose stem is not in transcript_transformed_stem
+    words_missing = [word for word in original_script_transformed if stemmer.stem(word) not in transcript_transformed_stem]
 
-    return len(words_missing)/len(orgininal_script_transformed), words_missing
+    return len(words_missing)/len(original_script_transformed), words_missing
 
 # def compute_standard_difference_measures(ground_truth, transcript, preprocessing=True):
 #
