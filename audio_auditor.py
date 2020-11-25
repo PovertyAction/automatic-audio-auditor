@@ -298,7 +298,8 @@ class QuestionAnalyzer:
         response['question'] = self.q_code
         response['time_in_audio'] = \
             f'{seconds_to_nice_format(self.q_first_appeared)}-{seconds_to_nice_format(self.q_first_appeared+self.q_duration)}'
-        response['read_appropiately'] = self.q_read_appropiately
+        response['question_missing'] = self.q_missing
+        response['read_inappropiately'] = self.q_read_inappropiately
 
         # if response['read_appropiately'] is False:
         response['perc_script_missing'] = self.perc_script_missing
@@ -314,12 +315,12 @@ class QuestionAnalyzer:
 
         return response
 
-    def analyze_survey_question(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55):
+    def analyze_survey_question(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55, question_missing_threshold=0.8):
 
         #Get question name, code, type
         q_full_name = self.ta_row['Field name']
         self.q_code = q_full_name.split('/')[-1]
-        print(f'q_code {self.q_code}')
+        print_if_debugging(f'q_code {self.q_code}')
 
         self.q_type = questionnaire_texts.get_question_property(
             self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
@@ -377,7 +378,8 @@ class QuestionAnalyzer:
         #For very short question scripts (below 4 words), we reduce threshold
         if len(self.q_script.split(" "))<=3:
             read_appropiately_threshold = read_appropiately_threshold_short_questions
-        self.q_read_appropiately = self.perc_script_missing<read_appropiately_threshold
+        self.q_read_inappropiately = self.perc_script_missing>read_appropiately_threshold
+        self.q_missing = self.perc_script_missing > question_missing_threshold
 
         #Compare recorded response with surveycto saved response
         answer_analyzer = AnswerAnalyzer(self)
