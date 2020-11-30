@@ -132,7 +132,7 @@ class AnswerAnalyzer:
 
 
 
-    def transcript_has_too_many_phrases(self, threshold=6):
+    def transcript_has_too_many_phrases(self, threshold=5):
         if len(self.q_analyzer.q_transcript)>threshold:
             return True
         else:
@@ -270,7 +270,7 @@ class AnswerAnalyzer:
 
         #If the question_transcript has too many phrases, it might be the case this questions contains other subquestions all toqueter (fsec3-fsec7 for example), and hence, the text_audit does not separate them, we cant do the answer analysis
         if self.transcript_has_too_many_phrases():
-            return None, 'Transcript has too many phrases, so there might be more than one question/answer here'
+            return None, 'Transcript has too many phrases: there might to many back and forths or more than one question/answer here'
 
         if self.q_analyzer.q_type == 'integer':
             response, reason = self.analyze_integer_response()
@@ -305,7 +305,7 @@ class QuestionAnalyzer:
         response['perc_script_missing'] = self.perc_script_missing
         response['q_words_missing'] = self.words_missing
         response['q_script'] = self.q_script
-        response['q_and_ans_transcript'] = self.q_transcript
+        response['transcript'] = self.q_transcript
         response['answer_matches_surveycto'] = answer_analyzer.answer_matches_surveycto
         response['reason_for_match'] = answer_analyzer.reason_for_match
         response['surveycto_answer'] = answer_analyzer.surveycto_answer
@@ -504,7 +504,7 @@ class SurveyEntrieAnalyzer:
         if len(q_results)>0:
             results_df = pd.DataFrame()
             results_df = results_df.append(q_results, ignore_index=True)
-            results_df.to_csv(self.case_id+'_results.csv', index=False)
+            results_df.to_csv('Caseid_reports/'+self.case_id+'_results.csv', index=False)
 
         print("")
         return q_results

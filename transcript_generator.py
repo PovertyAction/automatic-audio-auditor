@@ -12,10 +12,9 @@ abbreviations = {
 
 transcripts_cache = None
 previous_transcription = None
-
-debugging = False
+show_prints = False
 def print_if_debugging(text):
-    if debugging:
+    if show_prints:
         print(text)
 
 def increase_sound_volume(sound, amount):
@@ -73,10 +72,13 @@ def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
-def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False):
+def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False):
     '''
     Given the url of a file and a specified language, outputs its transcript using azure speech recognition API.
     '''
+    global show_prints
+    show_prints = show_debugging_prints
+
     global previous_transcription
 
     #Check that file exists
@@ -85,7 +87,8 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         return False
 
     #Check if questions exist in transcript cache
-    if  project_name in transcripts_cache.keys() and \
+    if  look_for_transcript_in_cache and \
+        project_name in transcripts_cache.keys() and \
         case_id in transcripts_cache[project_name] and \
         q_code in transcripts_cache[project_name][case_id]:
             print('Using cached transcript')
@@ -100,8 +103,9 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
 
     print(f'Generating transcript for {project_name} {case_id} {q_code}')
 
-    #Get offset and duration fo question in audio record
-    offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
+    #Get offset and duration fo question in audio record, if they were not given as arguments
+    if offset is None or duration is None:
+        offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
 
     #Read file
     sound = AudioSegment.from_file(audio_url)
@@ -118,7 +122,7 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         sound = increase_sound_volume(sound, 100)
 
     #Generate transcript
-    transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV)
+    transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV, show_azure_debugging_prints)
 
     #Replace abbreviations for full words
     transcription_no_abb = [replace_abbreviations(phrase) for phrase in transcription]
@@ -126,15 +130,16 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
     previous_transcription = transcription_no_abb
 
     #Save transcript in transcript_cache
-    if project_name not in transcripts_cache:
-        transcripts_cache[project_name] = {}
-    if case_id not in transcripts_cache[project_name]:
-        transcripts_cache[project_name][case_id] = {}
+    if save_transcript_in_cache:
+        if project_name not in transcripts_cache:
+            transcripts_cache[project_name] = {}
+        if case_id not in transcripts_cache[project_name]:
+            transcripts_cache[project_name][case_id] = {}
 
-    transcripts_cache[project_name][case_id][q_code] = transcription_no_abb
-    #Save to file
-    with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
-        json.dump(transcripts_cache, transcripts_cache_json_file)
+        transcripts_cache[project_name][case_id][q_code] = transcription_no_abb
+        #Save to file
+        with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
+            json.dump(transcripts_cache, transcripts_cache_json_file)
 
     return transcription_no_abb
 
@@ -153,10 +158,18 @@ load_transcripts_cache()
 
 if __name__ =='__main__':
 
-    audio_url = "X:\Box Sync\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Audio Audits (Consent)\AA_0199ef62-8639-43a7-b156-a6914f1396be-audio_audit_cons_c_call_phone.m4a"
+    audio_url = "X:\\Box Sync\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media\\AA_fd86f4ab-c851-4ca7-b309-ef07ffdb0cda_cons2_audio.m4a"
+
     language = 'es-CO'
 
-    generate_transcript('example_project_name', 'example_case_id', 'example_q_code', audio_url, 'example_language', 0)
+    # 13:24-13:58
+    duration=34
+    offset=13*60+24
+
+    generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=False, duration=duration, offset=offset, save_transcript_in_cache=False,
+    show_debugging_prints=True, show_azure_debugging_prints=True)
+
+
 
     # print(f'Duration: {get_audio_duration(audio_url)}')
     #

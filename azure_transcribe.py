@@ -3,8 +3,6 @@ import azure.cognitiveservices.speech as speechsdk
 import time
 from azure_keys import get_speech_key, get_service_region
 
-debugging = False
-
 #Parameters
 speech_key = get_speech_key()
 service_region = get_service_region()
@@ -31,14 +29,14 @@ def recognize_once(speech_recognizer):
         if cancellation_details.reason == speechsdk.CancellationReason.Error:
             print("Error details: {}".format(cancellation_details.error_details))
 
-def print_if_debugging(text):
-    if debugging:
+def print_if_debugging(text, show_debugging_prints):
+    if show_debugging_prints:
         print(text)
 
 #Global to indicate when transcription is done
 done = None
 
-def generate_transcript(file_path):
+def generate_transcript(file_path, show_debugging_prints=False):
     global done
     done = False
 
@@ -53,14 +51,14 @@ def generate_transcript(file_path):
     #Method triggered when transcription is finished
     def stop_cb(evt):
         global done
-        print_if_debugging('CLOSING on {}'.format(evt))
+        print_if_debugging('CLOSING on {}'.format(evt), show_debugging_prints)
         speech_recognizer.stop_continuous_recognition()
         done = True
 
     #List saving all pieces of recognized text
     recognized_text = []
     def save_recognized_text(evt):
-        print_if_debugging('RECOGNIZED: {}'.format(evt))
+        print_if_debugging('RECOGNIZED: {}'.format(evt), show_debugging_prints)
         if(evt.result.text!=""):
             recognized_text.append(evt.result.text)
 
@@ -71,9 +69,9 @@ def generate_transcript(file_path):
 
     #For other callbacks:
     # speech_recognizer.recognizing.connect(lambda evt: print_if_debugging('RECOGNIZING: {}'.format(evt)))
-    speech_recognizer.session_started.connect(lambda evt: print_if_debugging('SESSION STARTED: {}'.format(evt)))
-    speech_recognizer.session_stopped.connect(lambda evt: print_if_debugging('SESSION STOPPED {}'.format(evt)))
-    speech_recognizer.canceled.connect(lambda evt: print_if_debugging('CANCELED {}'.format(evt)))
+    speech_recognizer.session_started.connect(lambda evt: print_if_debugging('SESSION STARTED: {}'.format(evt), show_debugging_prints))
+    speech_recognizer.session_stopped.connect(lambda evt: print_if_debugging('SESSION STOPPED {}'.format(evt), show_debugging_prints))
+    speech_recognizer.canceled.connect(lambda evt: print_if_debugging('CANCELED {}'.format(evt), show_debugging_prints))
 
     #Start continuous recognition
     speech_recognizer.start_continuous_recognition()
@@ -83,7 +81,7 @@ def generate_transcript(file_path):
         time.sleep(0.5)
 
     full_transcript = recognized_text
-    print_if_debugging(full_transcript)
+    print_if_debugging(full_transcript, show_debugging_prints)
     return full_transcript
 
 if __name__ == '__main__':
