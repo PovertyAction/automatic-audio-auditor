@@ -72,6 +72,53 @@ def import_data(dataset_path):
 
     return dataset, label_dict, value_label_dict
 
+def save_df_to_excel(saving_path, df_to_save):
+
+    #Create ExcelWriter instance
+    writer = pd.ExcelWriter(saving_path, engine='xlsxwriter')
+
+    # Convert the dataframe to an XlsxWriter Excel object.
+    df_to_save.to_excel(writer, sheet_name='Sheet1', index=False)
+
+    # Get the xlsxwriter workbook and worksheet objects to define style
+    workbook  = writer.book
+    worksheet = writer.sheets['Sheet1']
+
+    #Freeze first row
+    worksheet.freeze_panes(1,0)
+
+    # Add a header format.
+    header_format = workbook.add_format({
+        'bold': True,
+        'text_wrap': True,
+        'valign': 'top',
+        'fg_color': '#D7E4BC',
+        'border': 1})
+
+    # Write the column headers with the defined format.
+    for col_num, value in enumerate(df_to_save.columns.values):
+        worksheet.write(0, col_num, value, header_format)
+
+    #Format for all other rows
+    workbook_format = workbook.add_format({
+      'text_wrap': True,
+      'align': 'justify'})
+
+    # Set the column width and format.
+    # We will have 3 widths for columns: columns with very small entries (size 10),
+    # columns with medium size entries (size 20) and columns with long entries (size 40)
+    short_entries_cols_index = [0,1,4,5,6,10,12]
+    medium_entries_cols_index = [2,3,7,11]
+    long_entries_cols_index = [8,9,13,14]
+
+    for (entries_index, size_of_column) in \
+        [(short_entries_cols_index,10),(medium_entries_cols_index,20),(long_entries_cols_index,40)]:
+        for col in entries_index:
+            worksheet.set_column(col, col, size_of_column, workbook_format)
+
+    # Close the Pandas Excel writer and output the Excel file.
+    writer.save()
+
 class AnswerAnalyzer:
     def __init__(self, q_analyzer):
         self.q_analyzer = q_analyzer
@@ -500,11 +547,15 @@ class SurveyEntrieAnalyzer:
             #Keep record of last row
             previous_ta_row = ta_row
 
-        #Save results in a .csv
+        #Save sorted results in a .xlsx
         if len(q_results)>0:
             results_df = pd.DataFrame()
             results_df = results_df.append(q_results, ignore_index=True)
-            results_df.to_csv('Caseid_reports/'+self.case_id+'_results.csv', index=False)
+
+            #Sort df by perc_script_missing
+            results_df.sort_values(by='perc_script_missing', ascending=False, inplace=True)
+
+            save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df)
 
         print("")
         return q_results
