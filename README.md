@@ -17,6 +17,8 @@ For a presentation with a bit more of explanation, click [here](https://docs.goo
 * text_differences.py: Computes measures of differences between transcripts and questionnaires
 * questionnaire_texts.py: To extract questions scripts from questionnaires.
 * aa_params.py: Parameters for the audio auditor depending on the project (So far only implemented for RD1 and RD3 of COL RECOVR)
+* report_generation.py: Creates .xlsx reports based on the results of all cases reports
+* outputs_writer.py: Functions to save outputs
 
 ## Audio_auditor architechture
 
