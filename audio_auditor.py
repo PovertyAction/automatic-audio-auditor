@@ -356,9 +356,8 @@ class QuestionAnalyzer:
         response['answer_matches_surveycto'] = answer_analyzer.answer_matches_surveycto
         response['reason_for_match'] = answer_analyzer.reason_for_match
         response['surveycto_answer'] = answer_analyzer.surveycto_answer
-        response['audio_path'] = self.survey_entrie_analyzer.audio_path
-        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
-        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path
+        response['audio_path'] = self.survey_entrie_analyzer.audio_path.split("\\")[-1]
+        response['textaudit_path'] = self.survey_entrie_analyzer.text_audit_path.split("\\")[-1]
 
         return response
 
@@ -554,6 +553,9 @@ class SurveyEntrieAnalyzer:
 
             #Sort df by perc_script_missing
             results_df.sort_values(by='perc_script_missing', ascending=False, inplace=True)
+
+            #Change columns names
+            results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
 
             save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df)
 
