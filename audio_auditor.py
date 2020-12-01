@@ -148,6 +148,17 @@ class AnswerAnalyzer:
         else:
             return False
 
+    def analyze_select_one_response(self, ):
+        #pending.. finding the correct option in transcript looks very tricky
+        select_one_type = self.q_analyzer.q_type.split()[1]
+        # if select_one_type == 'cov1':
+        #     print('***************************************************************\n\n\n\n')
+        #     print(self.q_analyzer.q_code)
+        #     print(self.q_analyzer.q_type)
+        #     print(self.q_analyzer.q_transcript)
+        #     print(self.surveycto_answer)
+
+        return None, None
 
     def analyze_integer_response(self):
 
@@ -281,6 +292,9 @@ class AnswerAnalyzer:
 
         elif self.q_analyzer.q_type in self.q_analyzer.survey_entrie_analyzer.audio_auditor.params['yes_no_question_types']:
             response, reason = self.analyze_yes_no_response()
+
+        # elif self.q_analyzer.q_type.split()[0] == 'select_one':
+        #     response, reason = self.analyze_select_one_response()
 
         else:
             response, reason = None, f'{self.q_analyzer.q_type} not supported for answer analysis'
@@ -587,40 +601,6 @@ if __name__=='__main__':
 
 '''
 # Deprecated code.
-
-## To generate aggregated reports.
-
-def add_results_to_report(results, row, words_missing_rate_threshold = 0.3):
-    for result in results: #One result for each part of survey
-        print_result = False
-
-        #Check that consent was read approximately completely
-        if result['custom_difference_measure'] > words_missing_rate_threshold:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: {int(result['custom_difference_measure']*100)}% of consent script is missing")
-            log_and_print(" ".join(result['transcript_sentences']))
-            print_result=True
-
-        #Check that consent questions are present
-        if result['participation_concent_question_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked participation consent question")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        if result['recording_concent_question_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Surveyor might have not asked recording consent question")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        #Check acceptance to consent is present
-        if result['acceptance_present'] is False:
-            log_and_print(f"Case_id {result['case_id']}, {result['Survey_part']}: Respondent acceptance to consent might not be present")
-            log_and_print(" ".join(result['transcript_sentences'][-4:]))
-            print_result=True
-
-        if print_result:
-            print(f"Consent audio path: {result['audio_path']}")
-            print(f'Full survey audio path: {row[COL_FULL_SURVEY_AUDIO_AUDIT_PATH]}')
-            print("////////////////////////////////////////////")
 
 ## Used in RD1 RECOVR COL to analyze consents. Should not be needed in other project.
 
