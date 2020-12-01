@@ -57,7 +57,11 @@ def remove_accents(word):
     return word
 
 def remove_punctuations(word):
-    return word.translate(str.maketrans('', '', string.punctuation))
+    no_punctuations = word.translate(str.maketrans('', '', string.punctuation))
+    for char in ['?','¿','!','¡']:
+        no_punctuations = no_punctuations.replace(char,"")
+
+    return no_punctuations
 
 def import_data(dataset_path):
   if dataset_path.endswith('dta'):
@@ -409,7 +413,7 @@ class QuestionAnalyzer:
         #Prepare response dict
         response = self.create_response_dict(answer_analyzer)
 
-        print(f"Output for {response['question']} ready\n")
+        # print(f"Output for {response['question']} ready\n")
 
         return response
 
@@ -484,7 +488,7 @@ class SurveyEntrieAnalyzer:
 
     def analyze_audio_recording(self):
 
-        self.print_survey_info()
+        # self.print_survey_info()
 
         if not self.audio_path_exists():
             return False
