@@ -2,7 +2,8 @@ import pandas as pd
 from os import listdir
 from os.path import isfile, join
 from varname import nameof
-from outputs_writer import save_df_to_excel
+import outputs_writer
+from name_reports_columns import *
 
 def get_concatenated_cases_reports(cases_reports_path):
 
@@ -20,26 +21,20 @@ def get_concatenated_cases_reports(cases_reports_path):
 
 
 def get_survey_report(case_id, enum_cases_df):
-    print(f'Report for case_id {case_id}')
 
-    case_df = enum_cases_df[enum_cases_df['Case ID']==case_id]
+    case_df = enum_cases_df[enum_cases_df[col_case_id]==case_id]
 
     #Questions missing
-    n_questions_missing = len(case_df[case_df['Question missing?']==True])
-    questions_missing = case_df[case_df['Question missing?']==True]['Question code'].tolist()
+    n_questions_missing = len(case_df[case_df[col_q_missing]==True])
+    questions_missing = case_df[case_df[col_q_missing]==True][col_q_code].tolist()
 
     #Questions read inappropiately
-    n_questions_read_inappropiately = len(case_df[case_df['Question read inappropiately?']==True])
-    questions_read_inappropiately = case_df[case_df['Question read inappropiately?']==True]['Question code'].tolist()
+    n_questions_read_inappropiately = len(case_df[case_df[col_q_read_inappropiately]==True])
+    questions_read_inappropiately = case_df[case_df[col_q_read_inappropiately]==True][col_q_code].tolist()
 
     #Number of questions with wrong answer in surveycto
-    n_questions_answer_error = len(case_df[case_df['Congruity between respondents answer and surveyCTO']==False])
-    questions_answer_error = case_df[case_df['Congruity between respondents answer and surveyCTO']==False]['Question code'].tolist()
-
-    # print(f'n_questions_missing {n_questions_missing}: {questions_missing}')
-    # print(f'n_questions_read_inappropiately {n_questions_read_inappropiately}: {questions_read_inappropiately}')
-    # print(f'n_questions_answer_error {n_questions_answer_error}: {questions_answer_error}')
-    # print("")
+    n_questions_answer_error = len(case_df[case_df[col_answer_congruity]==False])
+    questions_answer_error = case_df[case_df[col_answer_congruity]==False][col_q_code].tolist()
 
     #Add results to dict
     report = {
@@ -52,30 +47,61 @@ def get_survey_report(case_id, enum_cases_df):
         'n_questions_answer_error':n_questions_answer_error,
         'questions_answer_error':questions_answer_error
         }
-    # print(report)
     return report
 
 def create_enum_report(enum_id, cases_reports_df):
-    print("************************")
-    print(f'REPORT FOR ENUM {enum_id}')
 
     #All cases done by this enumerator
-    enum_cases_df = cases_reports_df[cases_reports_df['Enum ID']==enum_id]
-    surveys_cases_ids = enum_cases_df['Case ID'].unique()
+    enum_cases_df = cases_reports_df[cases_reports_df[col_enum_id]==enum_id]
+    surveys_cases_ids = enum_cases_df[col_case_id].unique()
 
     #Number of cases done
-    n_of_cases = enum_cases_df['Case ID'].nunique()
-    print(f'n_of_cases {n_of_cases}: {surveys_cases_ids}\n')
+    n_of_cases = enum_cases_df[col_case_id].nunique()
 
     enum_report = {}
     for case_id in surveys_cases_ids:
         survey_report = get_survey_report(case_id, enum_cases_df)
-        # print(survey_report)
         enum_report[case_id] = survey_report
 
     return enum_report
 
-def save_results_to_csv(survey_report):
+def create_question_report(question_code, cases_reports_df):
+
+    #Filter data for this question
+    question_df = cases_reports_df[cases_reports_df[col_q_code]==question_code]
+
+    #Compute stats
+    n_times_question_is_missing = sum(question_df[col_q_missing])
+    n_times_question_read_inappropiately= sum(question_df[col_q_read_inappropiately])
+    # n_times_answer_error = sum(question_df[col_answer_congruity])
+
+    question_report = {}
+    question_report['n_times_question_is_missing'] = n_times_question_is_missing
+    question_report['n_times_question_read_inappropiately'] = n_times_question_read_inappropiately
+
+    return question_report
+
+
+
+def save_question_level_report(q_level_report):
+
+    reports_df = pd.DataFrame(columns=[
+                                col_q_code,
+                                col_q_missing,
+                                col_q_read_inappropiately])
+
+    for i, q_code in enumerate(q_level_report.keys()):
+        row = [ q_code,
+                q_level_report[q_code]['n_times_question_is_missing'],
+                q_level_report[q_code]['n_times_question_read_inappropiately']]
+
+        reports_df.loc[i] = row
+
+    print(reports_df)
+    outputs_writer.save_df_to_excel('Question Level Report.xlsx', reports_df, medium_entries_cols_index=[0,1,2], sort_descending_by=col_q_missing)
+
+
+def save_surveyor_level_report(survey_report):
 
     def get_metric_sum_across_all_cases(survey_report, enum_id, metric):
 
@@ -148,35 +174,50 @@ def save_results_to_csv(survey_report):
         medium_entries_cols_index = [2]
         long_entries_cols_index = [4,6,8]
 
-        save_df_to_excel('Survey_Reportt.xlsx', reports_df,
+        print(reports_df)
+        outputs_writer.save_df_to_excel('Surveyor Level Report.xlsx', reports_df,
             short_entries_cols_index=short_entries_cols_index,
             medium_entries_cols_index=medium_entries_cols_index,
             long_entries_cols_index=long_entries_cols_index)
 
-        print(reports_df)
 
-def generate_survey_report(cases_reports_path):
+def generate_surveyor_level_report(cases_reports_df):
 
+    #Identify all unique surveyors
+    enumerators_ids = cases_reports_df[col_enum_id].unique()
+
+    #For each surveyor, filter df and compute stats
+    surveyor_level_report = {}
+    for enum_id in enumerators_ids:
+        enum_report = create_enum_report(enum_id, cases_reports_df)
+        surveyor_level_report[enum_id] = enum_report
+
+    save_surveyor_level_report(surveyor_level_report)
+
+
+def generate_question_level_report(cases_reports_df):
+
+    #Identify all unique questions
+    question_codes = cases_reports_df[col_q_code].unique()
+
+    #For each question, filter df and compute stats
+    question_level_report = {}
+    for question_code in question_codes:
+        question_report = create_question_report(question_code, cases_reports_df)
+        question_level_report[question_code] = question_report
+
+    save_question_level_report(question_level_report)
+
+def generate_report(cases_reports_path):
     #Import all casesid reports to one df
     cases_reports_df = get_concatenated_cases_reports(cases_reports_path)
 
-    #Identify all unique surveyors
-    enumerators_ids = cases_reports_df['Enum ID'].unique()
+    generate_surveyor_level_report(cases_reports_df)
 
-    #For each surveyor, filter df and compute stats
-    survey_report = {}
-    for enum_id in enumerators_ids:
-        enum_report = create_enum_report(enum_id, cases_reports_df)
-        survey_report[enum_id] = enum_report
-
-    print("survey_report")
-    print(survey_report)
-
-    save_results_to_csv(survey_report)
-
+    generate_question_level_report(cases_reports_df)
 
 if __name__ == '__main__':
 
     cases_reports_path = 'Caseid_reports'
 
-    generate_survey_report(cases_reports_path)
+    generate_report(cases_reports_path)

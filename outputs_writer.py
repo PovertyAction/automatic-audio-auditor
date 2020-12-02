@@ -1,10 +1,12 @@
 import pandas as pd
 
-def save_df_to_excel(saving_path, df_to_save, short_entries_cols_index, medium_entries_cols_index, long_entries_cols_index):
+def save_df_to_excel(saving_path, df_to_save, short_entries_cols_index=None, medium_entries_cols_index=None, long_entries_cols_index=None, sort_descending_by=None):
     # In addition to saving df to excel, we will give style to the xlsx spreadsheet
     # Different columns will have different widths, specified as arguments
 
-
+    #Sort df
+    if sort_descending_by is not None:
+        df_to_save.sort_values(by=sort_descending_by, ascending=False, inplace=True)
 
     #Create ExcelWriter instance
     writer = pd.ExcelWriter(saving_path, engine='xlsxwriter')
@@ -41,8 +43,9 @@ def save_df_to_excel(saving_path, df_to_save, short_entries_cols_index, medium_e
     # columns with medium size entries (size 20) and columns with long entries (size 40)
     for (entries_index, size_of_column) in \
         [(short_entries_cols_index,10),(medium_entries_cols_index,20),(long_entries_cols_index,40)]:
-        for col in entries_index:
-            worksheet.set_column(col, col, size_of_column, workbook_format)
+        if entries_index:
+            for col in entries_index:
+                worksheet.set_column(col, col, size_of_column, workbook_format)
 
     # Close the Pandas Excel writer and output the Excel file.
     writer.save()

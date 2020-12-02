@@ -526,8 +526,7 @@ class SurveyEntrieAnalyzer:
             results_df = pd.DataFrame()
             results_df = results_df.append(q_results, ignore_index=True)
 
-            #Sort df by perc_script_missing
-            results_df.sort_values(by='perc_script_missing', ascending=False, inplace=True)
+
 
             #Change columns names
             results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
@@ -540,7 +539,8 @@ class SurveyEntrieAnalyzer:
             save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df,
                 short_entries_cols_index=short_entries_cols_index,
                 medium_entries_cols_index=medium_entries_cols_index,
-                long_entries_cols_index=long_entries_cols_index)
+                long_entries_cols_index=long_entries_cols_index,
+                sort_descending_by = 'Perc. of Q script missing')
 
         print("")
         return q_results
