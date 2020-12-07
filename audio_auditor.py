@@ -155,6 +155,7 @@ class AnswerAnalyzer:
     def analyze_select_one_response(self, ):
         #pending.. finding the correct option in transcript looks very tricky
         select_one_type = self.q_analyzer.q_type.split()[1]
+
         # if select_one_type == 'cov1':
         #     print('***************************************************************\n\n\n\n')
         #     print(self.q_analyzer.q_code)
@@ -277,8 +278,8 @@ class AnswerAnalyzer:
             return self.q_analyzer.survey_entrie_analyzer.survey_row[self.q_analyzer.q_code]
         else:
             return None
-
     def check_answer_given_matches_surveycto(self):
+
 
         self.surveycto_answer = self.get_surveycto_answer()
         print_if_debugging(f'surveycto_answer {self.surveycto_answer}')
@@ -445,8 +446,14 @@ class SurveyEntrieAnalyzer:
         return True
 
     def get_text_audit_df(self):
+
         self.text_audit_path = self.get_media_file_path(file_to_get = TEXT_AUDIT)
-        text_audit_df = pd.read_csv(self.text_audit_path)
+
+
+        #open in universal-new-line mode, according to https://github.com/pandas-dev/pandas/issues/11166
+        text_audit_df = pd.read_csv(open(self.text_audit_path,'rU'), encoding='utf-8', engine='c')
+        # text_audit_df = pd.read_csv(self.text_audit_path)
+
         return text_audit_df
 
     def get_last_question_index(self):
