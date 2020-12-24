@@ -3,11 +3,26 @@ from os import listdir
 from os.path import isfile, join
 from varname import nameof
 import outputs_writer
+import sys
 from name_reports_columns import *
+import aa_params
 
-def get_concatenated_cases_reports(cases_reports_path):
+def get_concatenated_cases_reports(cases_reports_path, project_params):
 
-    reports_paths = [join(cases_reports_path, f) for f in listdir(cases_reports_path) if isfile(join(cases_reports_path, f))]
+    #Create list of cases id file reports
+    #Filter to only certain cases ids if cases_to_check param is given
+    if 'cases_to_check' in project_params:
+        reports_paths = [join(cases_reports_path, f) \
+                        for f in listdir(cases_reports_path) \
+                        if isfile(join(cases_reports_path, f)) and \
+                            f.split('_')[0] in project_params['cases_to_check']]
+        print('Will generate report for only certain cases ids')
+    else:
+        reports_paths = [join(cases_reports_path, f) \
+                    for f in listdir(cases_reports_path) \
+                    if isfile(join(cases_reports_path, f))]
+
+
 
     reports_dfs_list = []
     for report_path in reports_paths:
@@ -143,9 +158,9 @@ def generate_question_level_report(cases_reports_df):
 
     outputs_writer.save_df_to_excel('Question Level Report.xlsx', reports_df, medium_entries_cols_index=[0,1,2], sort_descending_by=col_q_missing)
 
-def generate_report(cases_reports_path):
+def generate_report(cases_reports_path, project_params):
     #Import all casesid reports to one df
-    cases_reports_df = get_concatenated_cases_reports(cases_reports_path)
+    cases_reports_df = get_concatenated_cases_reports(cases_reports_path, project_params)
 
     outputs_writer.save_df_to_excel(
         saving_path = 'All cases.xlsx',
@@ -164,4 +179,11 @@ if __name__ == '__main__':
 
     cases_reports_path = 'Caseid_reports'
 
-    generate_report(cases_reports_path)
+    projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
+
+    project_name = projects_ids_to_names[sys.argv[1]]
+    print(project_name)
+
+    project_params = aa_params.get_project_params(project_name)
+
+    generate_report(cases_reports_path, project_params)

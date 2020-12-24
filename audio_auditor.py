@@ -550,7 +550,6 @@ class SurveyEntrieAnalyzer:
                 sort_descending_by = 'Perc. of Q script missing')
 
         print("")
-        return q_results
 
 class AudioAuditor:
     def __init__(self, name):
@@ -570,6 +569,16 @@ class AudioAuditor:
 
         return completed_surveys_df
 
+    def filter_completed_surveys_to_only_selected_cases(self):
+
+        #If no specific list of cases for analysis was given, do nothing, we will analyze all of them
+        if 'cases_to_check' not in self.params:
+            return
+        else:
+            #Filter according to case id
+            selected_cases_ids = self.params['cases_to_check']
+            self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
+
     def run_audio_audit(self):
         '''
         Given audio audits and a questionaire, it checks if the questions and
@@ -585,18 +594,19 @@ class AudioAuditor:
         #Get survey attempts that where completed
         self.completed_surveys_df = self.get_completed_surveys(surveys_df)
 
+        #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
+        self.filter_completed_surveys_to_only_selected_cases()
+
         n_rows_to_process = self.completed_surveys_df.shape[0]
 
-        # report = []
+        print(f'n_rows_to_process {n_rows_to_process}')
 
         #Analyze each survey
         for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).iterrows():
 
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
-            results = survey_response_analyzer.analyze_audio_recording()
+            survey_response_analyzer.analyze_audio_recording()
 
-            #Create report of errors
-            # add_results_to_report(results, row)
 
 if __name__=='__main__':
 
