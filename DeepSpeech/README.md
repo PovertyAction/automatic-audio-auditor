@@ -22,3 +22,11 @@ source ./deepspeech-venv/bin/activate
 
 pip3 install -r requirements.txt
 ```
+
+## Downloading models
+
+I downloaded the spanish models from https://gitlab.com/Jaco-Assistant/deepspeech-polyglot
+
+There you can find other pre trained models for other languages (at the very bottom of the page).
+
+The english models can be found in DeepSpeech repo.
