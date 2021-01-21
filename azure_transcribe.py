@@ -6,7 +6,6 @@ from azure_keys import get_speech_key, get_service_region
 #Parameters
 speech_key = get_speech_key()
 service_region = get_service_region()
-language = 'es-CO'
 
 def get_speech_config_properties():
     print("Properties:")
@@ -36,7 +35,7 @@ def print_if_debugging(text, show_debugging_prints):
 #Global to indicate when transcription is done
 done = None
 
-def generate_transcript(file_path, show_debugging_prints=False):
+def generate_transcript(file_path, language, show_debugging_prints=False):
     global done
     done = False
 

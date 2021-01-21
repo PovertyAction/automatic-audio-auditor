@@ -8,7 +8,8 @@ abbreviations = {
     'Ppal.': 'principal',
     'Dpto.': 'departamento',
     'N.': 'numero',
-    'N.º': 'numero'}
+    'N.º': 'numero',
+    'N.º.': 'numero'}
 
 transcripts_cache = None
 previous_transcription = None
@@ -101,17 +102,21 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
             print('Using previous transcription')
             return previous_transcription
 
-    print(f'Generating transcript for {project_name} {case_id} {q_code}')
-
-    #Get offset and duration fo question in audio record, if they were not given as arguments
-    if offset is None or duration is None:
-        offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
+    print_if_debugging(f'Generating transcript for {project_name} {case_id} {q_code}')
 
     #Read file
     sound = AudioSegment.from_file(audio_url)
 
-    #Chop if offset and duration give
-    if offset is not None and duration is not None:
+    #If offset and duration where not given as arguments, eigher find them in text audit or set it to 0 and total length
+    if offset is None and duration is None:
+        if ta_row:
+            offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
+        else:
+            offset = 0
+            duration = sound.duration_seconds
+
+    #Chop sound according to offset and duration given
+    if offset is not None and duration is not None: #I think that at this point this if condition can never be false
       sound = sound[offset*1000:(offset+duration)*1000]##pydub works in milliseconds
 
     #Transform to .wav
@@ -122,7 +127,7 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         sound = increase_sound_volume(sound, 100)
 
     #Generate transcript
-    transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV, show_azure_debugging_prints)
+    transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV, language, show_azure_debugging_prints)
 
     #Replace abbreviations for full words
     transcription_no_abb = [replace_abbreviations(phrase) for phrase in transcription]
@@ -158,16 +163,24 @@ load_transcripts_cache()
 
 if __name__ =='__main__':
 
-    audio_url = "X:\\Box Sync\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media\\AA_fd86f4ab-c851-4ca7-b309-ef07ffdb0cda_cons2_audio.m4a"
-
+    audio_url = "X:\\Box Sync\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media\\AA_9ded1778-0639-4e1b-8051-e4ce3bb3a94e_cons2_audio.m4a"
     language = 'es-CO'
 
     # 13:24-13:58
-    duration=34
-    offset=13*60+24
+    duration=None
+    offset=None
 
-    generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=False, duration=duration, offset=offset, save_transcript_in_cache=False,
-    show_debugging_prints=True, show_azure_debugging_prints=True)
+    print(generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=False, duration=duration, offset=offset, save_transcript_in_cache=False, show_debugging_prints=True, show_azure_debugging_prints=True))
+
+
+    # #Printing transcripts of a particular question
+    # project_name = 'RECOVER_RD3_COL'
+    # question = 'cov1c'
+    # def print_transcripts_of_question(project_name, question_code):
+    #     for case_id in transcripts_cache[project_name].keys():
+    #         if question_code in transcripts_cache[project_name][case_id]:
+    #             print(transcripts_cache[project_name][case_id][question_code])
+    # print_transcripts_of_question(project_name, question)
 
 
 
