@@ -1,32 +1,90 @@
-# Running code
+# Training starting from raw surveyCTO audios
 
-`python3 deepspeech_transcriptions.py --aggressive 1 --audio ./audio/spanish_transcript.wav --model ./models/DeepSpeech-Ployglot-ES-20201026T155049Z-001/only\ models`
+## Building training set
 
-# Setup
+### Data transformation
 
-## Downloading transcriber for long wav files
+surveyCTO media are .mp4a 8khz 30 minute long audios. Deepspeech works with .wav 16khz ~10 second audios for training. So significant transformation has happen first
 
-The Deepspeech-examples repo has an example that transcribes long wav files, so we will use that. Nonetheless, it has some missing features that we need, so rather than using the original repo, we will use a fork that has the necessary fixes.
+Run:
 
-`git clone Deepspeech-examples from https://github.com/fhalamos/DeepSpeech-examples/tree/vad_transcriber_updates`
+`data_transformation.py`
 
-## Setting up project
+For the moment audio_url and audio segmentation agressivenes is hardcoded.
 
+`data_transformation.py` needs ffmpeg installes
+
+`apt-get install ffmpeg libavcodec-extra`.
+
+In addition, it uses `vad_transcriber` from DeepSpeech-examples repo. So import those too.
+
+
+### Building trains.csv, dev.csv and test.csv
+
+[PENDING]
+
+Check out DeepSpeech documentation to learn how these files should be.
+
+## Training your model with your ready datasets
+
+### Setup
+
+Follow instructions on:
+https://deepspeech.readthedocs.io/en/latest/TRAINING.html
+
+Additionally, consider using following commands:
+
+`pip3 install --no-use-pep517 --upgrade -e .` instead of `pip3 install --upgrade -e .`
+
+At some point you might get a sox error. Fix it with
+
+`sudo apt-get install sox libsox-fmt-mp3`
+
+Once you have everything set up according to the instructions, run the following command from your virtual env to train:
+
+[Here working for my computer, fix routes so that it works for you]
+
+Spanish:
 ```
-cd audio_auditor/DeepSpeech
-
-#Once
-virtualenv -p python3 ./deepspeech-venv/
-
-source ./deepspeech-venv/bin/activate
-
-pip3 install -r requirements.txt
+python3 -u DeepSpeech.py \
+  --train_files /mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/data/colombia/train.csv \
+  --dev_files /mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/data/colombia/dev.csv \
+  --test_files /mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/data/colombia/test.csv \
+  --train_batch_size 1 \
+  --dev_batch_size 1 \
+  --test_batch_size 1 \
+  --load_cudnn true \
+  --epochs 3 \
+  --checkpoint_dir  /mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/models/DeepSpeech-Ployglot-ES-20201026T155049Z-001/checkpoint/cclmtv \
+  --learning_rate 0.0001 \
+  --alphabet_config_path ../deepspeech-polyglot/data/alphabet_es.txt
+  <!-- --load_evaluate last -->
 ```
 
-## Downloading models
+English:
+```
+python3 -u DeepSpeech.py \
+  --train_files data/ldc93s1/ldc93s1.csv \
+  --dev_files data/ldc93s1/prueba_dev.csv
+  --test_files data/ldc93s1/prueba_test.csv \
+  --train_batch_size 1 \
+  --dev_batch_size 1 \
+  --test_batch_size 1 \
+  --n_hidden 2048 \
+  --load_cudnn true \
+  --epochs 3 \
+  --checkpoint_dir  /mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/models/0.9.3/deepspeech-0.9.3-checkpoint/ \
+  --learning_rate 0.0001 \
+  <!-- --load_evaluate last -->
+```
 
-I downloaded the spanish models from https://gitlab.com/Jaco-Assistant/deepspeech-polyglot
 
-There you can find other pre trained models for other languages (at the very bottom of the page).
+Resources still to check:
+On resampling
+https://discourse.mozilla.org/t/inference-with-model-different-than-16khz/43217/23
 
-The english models can be found in DeepSpeech repo.
+On fine tuning
+https://discourse.mozilla.org/t/links-to-pretrained-models/62688/21
+
+Might be useful:
+https://discourse.mozilla.org/t/training-model-for-fluently-spoken-language/43571/3
