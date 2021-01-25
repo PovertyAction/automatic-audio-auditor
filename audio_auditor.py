@@ -14,6 +14,7 @@ from num2words import num2words
 from text_to_num import alpha2digit
 
 from outputs_writer import save_df_to_excel
+import transcripts_cache_manager
 
 #Some string constants used along the code
 FIRST_CONSENT = 'first_consent'
@@ -372,19 +373,27 @@ class QuestionAnalyzer:
             return False
 
         print_if_debugging(f'question_script: {self.q_script}')
-        # print(f'len question_script: {len(self.q_script)}')
 
-        self.q_transcript = \
+        #Load transcripts cache
+        transcripts_cache = transcripts_cache_manager.load_cache('transcripts_cache.json')
+
+        self.q_transcript, new_transcript = \
             transcript_generator.generate_transcript(
                 project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
                 case_id = self.survey_entrie_analyzer.case_id,
                 q_code = self.q_code,
                 audio_url=self.survey_entrie_analyzer.audio_path,
+                transcripts_cache = transcripts_cache,
                 language=self.survey_entrie_analyzer.audio_auditor.params['language'],
                 ta_row = self.ta_row,
                 previous_ta_row=self.previous_ta_row,
                 next_ta_row=self.next_ta_row,
                 first_q_offset=self.survey_entrie_analyzer.start_recording_ta_offset)
+
+        #Save in transcript cache if transcript is new
+        if new_transcript:
+            transcripts_cache_manager.add_transcript_to_cache(transcripts_cache, project_name, case_id, q_code, self.q_transcript)
+            transcripts_cache_manager.save_cache(transcripts_cache, 'transcripts_cache.json')
 
         if not self.q_transcript:
             print_if_debugging(f'Couldnt generate transcript for question {self.q_code}')
@@ -511,6 +520,7 @@ class SurveyEntrieAnalyzer:
         q_results = []
         previous_ta_row = None
         next_ta_row = None
+        print(f'self.audio_path {self.audio_path}')
         for index, ta_row in self.text_audit_df.iterrows():
 
             #Skip initial part of text audit which are not related to questions
@@ -593,6 +603,10 @@ class AudioAuditor:
 
         #Get survey attempts that where completed
         self.completed_surveys_df = self.get_completed_surveys(surveys_df)
+
+        #Save file with audio audits paths for training
+        not_empty_filter = self.completed_surveys_df['audio_audit_survey'] != ''
+        self.completed_surveys_df['audio_audit_survey'][not_empty_filter].to_csv('audio_audits_paths.csv', index=False)
 
         #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
         self.filter_completed_surveys_to_only_selected_cases()

@@ -72,7 +72,7 @@ def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
-def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=True):
+def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, transcripts_cache, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=True):
     '''
     Given the url of a file and a specified language, outputs its transcript using azure speech recognition API.
     '''
@@ -91,9 +91,11 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         project_name in transcripts_cache.keys() and \
         case_id in transcripts_cache[project_name] and \
         q_code in transcripts_cache[project_name][case_id]:
-            print('Using cached transcript')
-            return transcripts_cache[project_name][case_id][q_code]
-
+            print('>>>>>Using cached transcript')
+            return transcripts_cache[project_name][case_id][q_code], False
+    else:
+        print('nop')
+        
     #If question has same timeframe as previous question, return previous transcript
     if same_timeframe_as_previous_question(ta_row, previous_ta_row):
 
@@ -129,48 +131,28 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
 
     previous_transcription = transcription_no_abb
 
-    #Save transcript in transcript_cache
-    if save_transcript_in_cache:
-        if project_name not in transcripts_cache:
-            transcripts_cache[project_name] = {}
-        if case_id not in transcripts_cache[project_name]:
-            transcripts_cache[project_name][case_id] = {}
-
-        transcripts_cache[project_name][case_id][q_code] = transcription_no_abb
-        #Save to file
-        with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
-            json.dump(transcripts_cache, transcripts_cache_json_file)
-
     if return_list_phrases:
-        return transcription_no_abb
+        return transcription_no_abb, True
     else:
-        return ' '.join(transcription_no_abb).strip('\"')
+        return ' '.join(transcription_no_abb).strip('\"'), True
 
-def load_transcripts_cache():
-    global transcripts_cache
 
-    #If transcripts cache json file does not exist, create it
-    if not os.path.exists('transcripts_cache.json'):
-        with open("transcripts_cache.json", "w") as outfile:
-            json.dump({}, outfile)
 
-    with open("transcripts_cache.json") as transcripts_cache_json_file:
-        transcripts_cache = json.load(transcripts_cache_json_file)
 
-load_transcripts_cache()
 
 if __name__ =='__main__':
 
     audio_url = "X:\\Box Sync\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media\\AA_fd86f4ab-c851-4ca7-b309-ef07ffdb0cda_cons2_audio.m4a"
-
+    transcripts_cache_file = 'transcripts_cache.json'
     language = 'es-CO'
 
-    # 13:24-13:58
-    duration=34
-    offset=13*60+24
+    duration=None
+    offset=None
 
-    generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=False, duration=duration, offset=offset, save_transcript_in_cache=False,
-    show_debugging_prints=True, show_azure_debugging_prints=True)
+    import transcripts_cache_manager
+    transcripts_cache = transcripts_cache_manager.load_cache(transcripts_cache_file)
+
+    generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=True, duration=duration, offset=offset, save_transcript_in_cache=False, transcripts_cache = transcripts_cache, show_debugging_prints=True, show_azure_debugging_prints=True)
 
 
 

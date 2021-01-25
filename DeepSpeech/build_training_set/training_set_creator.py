@@ -27,6 +27,7 @@ import wavSplit
 #Import audio auditor modules
 sys.path.append(os.path.abspath('../..'))
 import transcript_generator
+import transcripts_cache_manager
 
 #Parameters
 segment_generation_aggressive = 3
@@ -41,21 +42,14 @@ def get_audio_paths(media_folder):
 
     return full_audio_paths_list
 
-def create_audio_chunks(project_name, audio_path):
-    #Create directory for outputs
-    file_name = audio_path.split('/')[-1].split('.')[0]
-    outputs_directory = '/mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/training_data/'+project_name+'/'+file_name
-    if os.path.exists(outputs_directory):
-        return outputs_directory
-
-    os.makedirs(outputs_directory)
+def create_audio_chunks(audio_chunks_dir, audio_file_name, audio_path):
 
     #Transform to wav
-    wav_copy_path = outputs_directory+'/'+file_name+'_wav_copy.wav'
+    wav_copy_path = audio_chunks_dir+'/'+audio_file_name+'_wav_copy.wav'
+
     wav_transformer.transform_to_wav(audio_path, wav_copy_path)
 
     #Create segments of audio, to create small chunks
-    print(wav_copy_path)
     segments, sample_rate, audio_length = wavTranscriber.vad_segment_generator(wav_copy_path, segment_generation_aggressive)
 
     #Remove wav copy
@@ -67,7 +61,7 @@ def create_audio_chunks(project_name, audio_path):
         print("Processing chunk %002d" % (i,))
         audio = np.frombuffer(segment, dtype=np.int16)
 
-        output_file_name = outputs_directory+'/'+str(i)+'_chunck.wav'
+        output_file_name = audio_chunks_dir+'/'+str(i)+'_chunck.wav'
 
         wavSplit.write_wave(output_file_name, audio, 16000)
 
@@ -77,26 +71,32 @@ def create_audio_chunks(project_name, audio_path):
             os.remove(output_file_name)
             print(f'{i} deleted')
 
-    print(outputs_directory)
-    return outputs_directory
-
 def get_all_files_path(directory):
 
     only_files = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    return only_files
+    return sorted(only_files)
 
-def create_training_set(project_name, media_folder, testing=False):
+def create_training_set(project_name, transcripts_cache_file, media_folder, testing=False):
 
     all_audios_paths = get_audio_paths(media_folder)
 
+    #Create folder for outputs
     outputs_directory = '/mnt/c/Users/felip/ml_for_survey_data_quality/DeepSpeech/training_data/'+project_name
     if not os.path.exists(outputs_directory):
         os.mkdir(outputs_directory)
 
+    #Load transcripts cache
+    transcripts_cache = transcripts_cache_manager.load_cache(transcripts_cache_file)
+
     df_rows = []
     for audio_path in all_audios_paths:
 
-        chunks_dir = create_audio_chunks(project_name, audio_path)
+        #Create directory for this audio outputs
+        audio_file_name = audio_path.split('/')[-1].split('.')[0]
+        chunks_dir = outputs_directory+'/'+audio_file_name
+        if not os.path.exists(chunks_dir):
+            os.makedirs(chunks_dir)
+            create_audio_chunks(chunks_dir, audio_file_name, audio_path)
 
         #For each audio chunk, get its size, transcript, and append it to training_set_df
         for chunk_index, chunk_path in enumerate(get_all_files_path(chunks_dir)):
@@ -109,13 +109,15 @@ def create_training_set(project_name, media_folder, testing=False):
 
             chunk_size = os.path.getsize(chunk_path)
 
-            chunk_transcript = transcript_generator.generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=chunk_path, language='es-CO', first_q_offset=0, look_for_transcript_in_cache=False, save_transcript_in_cache=False,
-            show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=False)
+            chunk_transcript, new_transcript = transcript_generator.generate_transcript(project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), audio_url=chunk_path, language='es-CO', first_q_offset=0, look_for_transcript_in_cache=True, transcripts_cache=transcripts_cache, show_debugging_prints=True, show_azure_debugging_prints=False, return_list_phrases=False)
 
             if chunk_transcript != '':
                 print([chunk_path, chunk_size, chunk_transcript])
                 df_rows.append([chunk_path, chunk_size, chunk_transcript.replace('"', '')])
 
+                if new_transcript:
+                    transcripts_cache_manager.add_transcript_to_cache(transcripts_cache=transcripts_cache, project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), transcript=chunk_transcript)
+                    transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
     #Create .csv
     training_set_df = pd.DataFrame()
     training_set_df = training_set_df.append(df_rows)
@@ -127,4 +129,5 @@ def create_training_set(project_name, media_folder, testing=False):
 if __name__ == '__main__':
     project_name = 'RECOVER-RD3-COL'
     media_folder = '/mnt/x/Box Sync/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media'
-    create_training_set(project_name, media_folder, testing=True)
+    transcripts_cache_file = 'deepspeech_training_cache.json'
+    create_training_set(project_name, transcripts_cache_file, media_folder, testing=True)
