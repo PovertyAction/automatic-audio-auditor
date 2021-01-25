@@ -72,7 +72,7 @@ def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
-def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False):
+def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=True):
     '''
     Given the url of a file and a specified language, outputs its transcript using azure speech recognition API.
     '''
@@ -101,10 +101,10 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
             print('Using previous transcription')
             return previous_transcription
 
-    print(f'Generating transcript for {project_name} {case_id} {q_code}')
+    print_if_debugging(f'Generating transcript for {project_name} {case_id} {q_code}')
 
     #Get offset and duration fo question in audio record, if they were not given as arguments
-    if offset is None or duration is None:
+    if ta_row and (offset is None or duration is None):
         offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
 
     #Read file
@@ -141,7 +141,10 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
             json.dump(transcripts_cache, transcripts_cache_json_file)
 
-    return transcription_no_abb
+    if return_list_phrases:
+        return transcription_no_abb
+    else:
+        return ' '.join(transcription_no_abb).strip('\"')
 
 def load_transcripts_cache():
     global transcripts_cache

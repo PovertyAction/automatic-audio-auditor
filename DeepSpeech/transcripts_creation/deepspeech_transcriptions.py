@@ -3,8 +3,8 @@
 
 from os import path
 import sys
-sys.path.append(path.abspath('../../DeepSpeech-examples'))
-sys.path.append(path.abspath('../../DeepSpeech-examples/vad_transcriber'))
+sys.path.append(path.abspath('../../../DeepSpeech-examples'))
+sys.path.append(path.abspath('../../../DeepSpeech-examples/vad_transcriber'))
 
 from vad_transcriber import audioTranscript_cmd
 
