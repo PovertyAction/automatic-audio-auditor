@@ -1,8 +1,3 @@
-Where to download pretrained models in various languages:
-https://discourse.mozilla.org/t/links-to-pretrained-models/62688/16
-
-English in the official releases.
-
 ### Setup
 
 Follow instructions on:
