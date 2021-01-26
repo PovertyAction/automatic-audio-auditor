@@ -102,7 +102,8 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
     df_rows = []
     for audio_index, audio_path in enumerate(all_audios_paths):
 
-        if testing and audio_index>5:
+        print(f'Working on audio {audio_path.split("media")[1]}')
+        if testing and audio_index>30:
             break
 
 
@@ -114,30 +115,31 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
 
         #Create audio chunks if they havent been created yet
         if not all_chunks_already_created(chunks_dir):
-            print('All chunks not created, creating them now')
+            print('Creating chunks')
             create_audio_chunks(chunks_dir, audio_file_name, audio_path)
         else:
             print('All chunks already created')
 
         #For each audio chunk, get its size, transcript, and append it to training_set_df
         for chunk_index, chunk_path in enumerate(get_all_chunks_path(chunks_dir)):
-            if testing:
-                if chunk_index==0:
-                    continue
-                if chunk_index>2:
-                    break
+            # if testing:
+            #     if chunk_index==0:
+            #         continue
+            #     if chunk_index>2:
+            #         break
 
             chunk_size = os.path.getsize(chunk_path)
 
-            chunk_transcript, new_transcript = transcript_generator.generate_transcript(project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), audio_url=chunk_path, language='es-CO', first_q_offset=0, look_for_transcript_in_cache=True, transcripts_cache=transcripts_cache, show_debugging_prints=True, show_azure_debugging_prints=False, return_list_phrases=False)
+            chunk_transcript, new_transcript = transcript_generator.generate_transcript(project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), audio_url=chunk_path, language='es-CO', first_q_offset=0, look_for_transcript_in_cache=True, transcripts_cache=transcripts_cache, show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=False)
+
+            if new_transcript:
+                transcripts_cache_manager.add_transcript_to_cache(transcripts_cache=transcripts_cache, project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), transcript=chunk_transcript)
+                transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
 
             if chunk_transcript != '':
-                print([chunk_path, chunk_size, chunk_transcript])
                 df_rows.append([chunk_path, chunk_size, chunk_transcript.replace('"', '')])
 
-                if new_transcript:
-                    transcripts_cache_manager.add_transcript_to_cache(transcripts_cache=transcripts_cache, project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), transcript=chunk_transcript)
-                    transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
+        print('Transcrips for chunks ready\n')
     #Create .csv
     training_set_df = pd.DataFrame()
     training_set_df = training_set_df.append(df_rows)
