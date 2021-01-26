@@ -91,17 +91,17 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         project_name in transcripts_cache.keys() and \
         case_id in transcripts_cache[project_name] and \
         q_code in transcripts_cache[project_name][case_id]:
-            print('>>>>>Using cached transcript')
+            print_if_debugging('>>>>>Using cached transcript')
             return transcripts_cache[project_name][case_id][q_code], False
 
     #If question has same timeframe as previous question, return previous transcript
     if same_timeframe_as_previous_question(ta_row, previous_ta_row):
 
         if previous_transcription: #Maybe we have the same timeframe
-            print('Using previous transcription')
+            print_if_debugging('Using previous transcription')
             return previous_transcription
 
-    print_if_debugging(f'Generating transcript for {project_name} {case_id} {q_code}')
+    print(f'Generating transcript for {project_name} {case_id} {q_code}')
 
     #Get offset and duration fo question in audio record, if they were not given as arguments
     if ta_row and (offset is None or duration is None):
