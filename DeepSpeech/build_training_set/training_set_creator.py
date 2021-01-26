@@ -71,10 +71,21 @@ def create_audio_chunks(audio_chunks_dir, audio_file_name, audio_path):
             os.remove(output_file_name)
             print(f'{i} deleted')
 
-def get_all_files_path(directory):
+    #Once finished, we create a file that signals that we have created all chunks
+    file = open(audio_chunks_dir+"/all_chunks_created.txt", "w")
+    file.write("All chunks have been created")
+    file.close()
+
+def get_all_chunks_path(directory):
 
     only_files = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    return sorted(only_files)
+    only_wav = [f for f in only_files if f.split('.')[1]=="wav"]
+    return sorted(only_wav)
+
+def all_chunks_already_created(chunks_dir):
+    #We know that all_chunks have been created if a file named 'all_chunks_created.txt' exist in the chunk dir
+    return os.path.isfile(chunks_dir+"/all_chunks_created.txt")
+
 
 def create_training_set(project_name, transcripts_cache_file, media_folder, testing=False):
 
@@ -100,11 +111,16 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
         chunks_dir = outputs_directory+'/'+audio_file_name
         if not os.path.exists(chunks_dir):
             os.makedirs(chunks_dir)
+
+        #Create audio chunks if they havent been created yet
+        if not all_chunks_already_created(chunks_dir):
+            print('All chunks not created, creating them now')
             create_audio_chunks(chunks_dir, audio_file_name, audio_path)
+        else:
+            print('All chunks already created')
 
         #For each audio chunk, get its size, transcript, and append it to training_set_df
-        for chunk_index, chunk_path in enumerate(get_all_files_path(chunks_dir)):
-
+        for chunk_index, chunk_path in enumerate(get_all_chunks_path(chunks_dir)):
             if testing:
                 if chunk_index==0:
                     continue
