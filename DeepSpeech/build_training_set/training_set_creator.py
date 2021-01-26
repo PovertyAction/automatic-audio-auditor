@@ -89,7 +89,11 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
     transcripts_cache = transcripts_cache_manager.load_cache(transcripts_cache_file)
 
     df_rows = []
-    for audio_path in all_audios_paths:
+    for audio_index, audio_path in enumerate(all_audios_paths):
+
+        if testing and audio_index>5:
+            break
+
 
         #Create directory for this audio outputs
         audio_file_name = audio_path.split('/')[-1].split('.')[0]
@@ -130,4 +134,4 @@ if __name__ == '__main__':
     project_name = 'RECOVER-RD3-COL'
     media_folder = '/mnt/x/Box Sync/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media'
     transcripts_cache_file = 'deepspeech_training_cache.json'
-    create_training_set(project_name, transcripts_cache_file, media_folder, testing=True)
+    create_training_set(project_name, transcripts_cache_file, media_folder, testing=False)

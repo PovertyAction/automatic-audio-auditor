@@ -93,9 +93,7 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         q_code in transcripts_cache[project_name][case_id]:
             print('>>>>>Using cached transcript')
             return transcripts_cache[project_name][case_id][q_code], False
-    else:
-        print('nop')
-        
+
     #If question has same timeframe as previous question, return previous transcript
     if same_timeframe_as_previous_question(ta_row, previous_ta_row):
 
@@ -116,12 +114,14 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
     if offset is not None and duration is not None:
       sound = sound[offset*1000:(offset+duration)*1000]##pydub works in milliseconds
 
-    #Transform to .wav
-    AUDIO_FILE_WAV = "transcript.wav"
-    sound.export(AUDIO_FILE_WAV, format="wav")
-
     if increase_volume:
         sound = increase_sound_volume(sound, 100)
+
+    #Transform to .wav
+    AUDIO_FILE_WAV = "transcript.wav"
+    out = sound.export(AUDIO_FILE_WAV, format="wav")
+    #Close sound file
+    out.close()
 
     #Generate transcript
     transcription = azure_transcribe.generate_transcript(AUDIO_FILE_WAV, show_azure_debugging_prints)
