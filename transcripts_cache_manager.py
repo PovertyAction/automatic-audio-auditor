@@ -27,3 +27,4 @@ def save_cache(transcripts_cache, transcripts_cache_file):
 
     with open(transcripts_cache_file, 'w') as transcripts_cache_json_file:
         json.dump(transcripts_cache, transcripts_cache_json_file)
+        transcripts_cache_json_file.close()
