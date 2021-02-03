@@ -12,6 +12,7 @@ Pending:
 
 import os
 import sys
+import string
 
 import numpy as np
 import pandas as pd
@@ -86,6 +87,11 @@ def all_chunks_already_created(chunks_dir):
     #We know that all_chunks have been created if a file named 'all_chunks_created.txt' exist in the chunk dir
     return os.path.isfile(chunks_dir+"/all_chunks_created.txt")
 
+def remove_punctuations(chunk_transcript):
+    chunk_transcript = chunk_transcript.translate(str.maketrans('', '', string.punctuation))
+    for c in [',','.','¿','?','¡','!','"','º']:
+        chunk_transcript = chunk_transcript.replace(c,'')
+    return chunk_transcript
 
 def create_training_set(project_name, transcripts_cache_file, media_folder, testing=False):
 
@@ -103,7 +109,7 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
     for audio_index, audio_path in enumerate(all_audios_paths):
 
         print(f'Working on audio {audio_path.split("media")[1]}')
-        if testing and audio_index>3:
+        if testing and audio_index>20:
             break
 
 
@@ -137,7 +143,10 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
                 transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
 
             if chunk_transcript != '':
-                df_rows.append([chunk_path, chunk_size, chunk_transcript.replace('"', '')])
+                #Transform trancript to lower case and remove punctuations, deepspeech works better that way
+                chunk_transcript = chunk_transcript.lower()
+                chunk_transcript = remove_punctuations(chunk_transcript)
+                df_rows.append([chunk_path, chunk_size, chunk_transcript])
 
         print('Transcrips for chunks ready\n')
 
