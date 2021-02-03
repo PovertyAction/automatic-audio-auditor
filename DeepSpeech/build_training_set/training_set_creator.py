@@ -103,7 +103,7 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
     for audio_index, audio_path in enumerate(all_audios_paths):
 
         print(f'Working on audio {audio_path.split("media")[1]}')
-        if testing and audio_index>30:
+        if testing and audio_index>3:
             break
 
 
@@ -140,11 +140,31 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
                 df_rows.append([chunk_path, chunk_size, chunk_transcript.replace('"', '')])
 
         print('Transcrips for chunks ready\n')
-    #Create .csv
-    training_set_df = pd.DataFrame()
-    training_set_df = training_set_df.append(df_rows)
-    training_set_df.columns=['wav_filename', 'wav_filesize', 'transcript']
-    training_set_df.to_csv(outputs_directory+'/train.csv', index=False)
+
+    #Create .csv for training, dev and test
+    #We will use 60% of data for training, 20% for dev and 20% for testing
+
+    amount_rows = len(df_rows)
+    train_rows = df_rows[0:int(amount_rows*0.6)]
+    dev_rows = df_rows[int(amount_rows*0.6):int(amount_rows*0.8)]
+    test_rows = df_rows[int(amount_rows*0.8):]
+
+    for (file_name, rows_data) in \
+        [('train', train_rows),
+       ('dev', dev_rows),
+       ('test', test_rows)]:
+
+       #Create df
+       set_df = pd.DataFrame()
+
+       #Add rows to df
+       set_df = set_df.append(rows_data)
+
+       #Set columns names
+       set_df.columns=['wav_filename', 'wav_filesize', 'transcript']
+
+       #Create csv
+       set_df.to_csv(outputs_directory+'/'+file_name+'.csv', index=False)
 
 
 
@@ -152,4 +172,4 @@ if __name__ == '__main__':
     project_name = 'RECOVER-RD3-COL'
     media_folder = '/mnt/x/Box Sync/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media'
     transcripts_cache_file = 'deepspeech_training_cache.json'
-    create_training_set(project_name, transcripts_cache_file, media_folder, testing=False)
+    create_training_set(project_name, transcripts_cache_file, media_folder, testing=True)
