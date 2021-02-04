@@ -93,6 +93,13 @@ def remove_punctuations(chunk_transcript):
         chunk_transcript = chunk_transcript.replace(c,'')
     return chunk_transcript
 
+def represents_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
 def create_training_set(project_name, transcripts_cache_file, media_folder, testing=False):
 
     all_audios_paths = get_audio_paths(media_folder)
@@ -142,11 +149,18 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
                 transcripts_cache_manager.add_transcript_to_cache(transcripts_cache=transcripts_cache, project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), transcript=chunk_transcript)
                 transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
 
+            #We do not want to train our model with empty transcripts
             if chunk_transcript != '':
+
                 #Transform trancript to lower case and remove punctuations, deepspeech works better that way
                 chunk_transcript = chunk_transcript.lower()
                 chunk_transcript = remove_punctuations(chunk_transcript)
-                df_rows.append([chunk_path, chunk_size, chunk_transcript])
+
+                #We are currently not being able to capture numbers as words (instead of digits) when generating transcripts. Until then, we wont consider transcripts that are only numbers
+                if not represents_int(chunk_transcript):
+                    df_rows.append([chunk_path, chunk_size, chunk_transcript])
+                else:
+                    print(f'Not considering {chunk_transcript}')
 
         print('Transcrips for chunks ready\n')
 
