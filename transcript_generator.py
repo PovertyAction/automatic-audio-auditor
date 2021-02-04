@@ -60,11 +60,6 @@ def get_first_appeared_and_duration(ta_row, first_q_offset=0, previous_ta_row=No
         next_q_first_appeared = next_ta_row['First appeared (seconds into survey)']-first_q_offset
 
         if next_q_first_appeared-q_first_appeared<q_duration and next_q_first_appeared!=q_first_appeared: #Be sure they dont have the same starting point (grouped questions)
-            print_if_debugging('fixing q duration!!!!!!!!!!!!!!!')
-            print_if_debugging(f'next_q_first_appeared {next_q_first_appeared}')
-            print_if_debugging(f'q_first_appeared {q_first_appeared}')
-            print_if_debugging(f'q_duration {q_duration}')
-
             q_duration = next_q_first_appeared-q_first_appeared
 
     return q_first_appeared, q_duration+1
@@ -73,7 +68,20 @@ def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
-def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=False, show_azure_debugging_prints=False):
+#Temporal, should be replaced by merge in master
+def save_in_cache(project_name, case_id, q_code, transcription_no_abb):
+    if project_name not in transcripts_cache:
+        transcripts_cache[project_name] = {}
+    if case_id not in transcripts_cache[project_name]:
+        transcripts_cache[project_name][case_id] = {}
+
+    transcripts_cache[project_name][case_id][q_code] = transcription_no_abb
+    #Save to file
+    with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
+        json.dump(transcripts_cache, transcripts_cache_json_file)
+        transcripts_cache_json_file.close()
+
+def generate_transcript(project_name, case_id, q_code, audio_url, language, first_q_offset, ta_row=None, previous_ta_row=None, next_ta_row=None, increase_volume=False, look_for_transcript_in_cache=True, duration=None, offset=None, save_transcript_in_cache=True, show_debugging_prints=True, show_azure_debugging_prints=False):
     '''
     Given the url of a file and a specified language, outputs its transcript using azure speech recognition API.
     '''
@@ -92,15 +100,18 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
         project_name in transcripts_cache.keys() and \
         case_id in transcripts_cache[project_name] and \
         q_code in transcripts_cache[project_name][case_id]:
-            print('Using cached transcript')
+            print(f'Using cached transcript for {project_name} {case_id} {q_code}')
             return transcripts_cache[project_name][case_id][q_code]
+    else:
+        if check_cache_has_transcript(project_name, case_id, q_code):
+            print('wwwwwwwwwwwwaaaaaaaaaaat')
 
     #If question has same timeframe as previous question, return previous transcript
-    if same_timeframe_as_previous_question(ta_row, previous_ta_row):
-
-        if previous_transcription: #Maybe we have the same timeframe
-            print('Using previous transcription')
-            return previous_transcription
+    if same_timeframe_as_previous_question(ta_row, previous_ta_row) and previous_transcription:
+        print(f'Using previous transcription for {project_name} {case_id} {q_code}')
+        if save_transcript_in_cache:
+            save_in_cache(project_name, case_id, q_code, previous_transcription)
+        return previous_transcription
 
     print_if_debugging(f'Generating transcript for {project_name} {case_id} {q_code}')
 
@@ -109,7 +120,7 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
 
     #If offset and duration where not given as arguments, eigher find them in text audit or set it to 0 and total length
     if offset is None and duration is None:
-        if ta_row:
+        if ta_row is not None:
             offset, duration = get_first_appeared_and_duration(ta_row=ta_row, previous_ta_row=previous_ta_row, next_ta_row=next_ta_row, first_q_offset=first_q_offset)
         else:
             offset = 0
@@ -136,16 +147,9 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
 
     #Save transcript in transcript_cache
     if save_transcript_in_cache:
-        if project_name not in transcripts_cache:
-            transcripts_cache[project_name] = {}
-        if case_id not in transcripts_cache[project_name]:
-            transcripts_cache[project_name][case_id] = {}
+        save_in_cache(project_name, case_id, q_code, transcription_no_abb)
 
-        transcripts_cache[project_name][case_id][q_code] = transcription_no_abb
-        #Save to file
-        with open('transcripts_cache.json', 'w') as transcripts_cache_json_file:
-            json.dump(transcripts_cache, transcripts_cache_json_file)
-
+    print_if_debugging(f'Transcript {transcription_no_abb}')
     return transcription_no_abb
 
 def load_transcripts_cache():
@@ -161,6 +165,14 @@ def load_transcripts_cache():
 
 load_transcripts_cache()
 
+def check_cache_has_transcript(project_name, case_id, question_code):
+    if project_name in transcripts_cache and \
+        case_id in transcripts_cache[project_name] and \
+        question_code in transcripts_cache[project_name][case_id]:
+        return True
+    else:
+        return False
+
 if __name__ =='__main__':
 
     audio_url = "X:\\Box Sync\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media\\AA_9ded1778-0639-4e1b-8051-e4ce3bb3a94e_cons2_audio.m4a"
@@ -171,6 +183,12 @@ if __name__ =='__main__':
     offset=None
 
     print(generate_transcript(project_name='example_project_name', case_id='example_case_id', q_code='example_q_code', audio_url=audio_url, language=language, first_q_offset=0, look_for_transcript_in_cache=False, duration=duration, offset=offset, save_transcript_in_cache=False, show_debugging_prints=True, show_azure_debugging_prints=True))
+
+
+
+    # for project_name, case_id, question_code in [('RECOVER_RD3_COL', '11925', 'chd8_5'), ('RECOVER_RD3_COL', '13364', 'chd8_3')]:
+    #     print((project_name, case_id, question_code))
+    #     print(check_cache_has_transcript(project_name, case_id, question_code))
 
 
     # #Printing transcripts of a particular question
