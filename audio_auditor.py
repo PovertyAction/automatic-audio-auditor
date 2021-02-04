@@ -552,8 +552,8 @@ class SurveyEntrieAnalyzer:
         print("")
 
 class AudioAuditor:
-    def __init__(self, name):
-        self.params = aa_params.get_project_params(name)
+    def __init__(self, name, operating_system):
+        self.params = aa_params.get_project_params(name, operating_system)
 
     def get_completed_surveys(self, surveys_df):
 
@@ -596,26 +596,30 @@ class AudioAuditor:
 
         #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
         self.filter_completed_surveys_to_only_selected_cases()
-
         n_rows_to_process = self.completed_surveys_df.shape[0]
 
         print(f'n_rows_to_process {n_rows_to_process}')
 
         #Analyze each survey
-        for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).iterrows():
+        counter= 1
+
+        for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).sort_values(by=['caseid']).iterrows():
+            print('')
+            print(f"SURVEY {counter}/{n_rows_to_process}. Caseid {survey_row['caseid']}")
 
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
             survey_response_analyzer.analyze_audio_recording()
-
+            counter +=1
 
 if __name__=='__main__':
 
     projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
 
     project_name = projects_ids_to_names[sys.argv[1]]
+    operating_system = sys.argv[2]
     print(project_name)
 
-    audio_auditor = AudioAuditor(project_name)
+    audio_auditor = AudioAuditor(project_name, operating_system)
 
     audio_auditor.run_audio_audit()
 
