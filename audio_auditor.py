@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import string
 import sys
+import json
 
 import transcript_generator
 import text_differences
@@ -14,6 +15,7 @@ from num2words import num2words
 from text_to_num import alpha2digit
 
 from outputs_writer import save_df_to_excel
+import db_manager
 
 #Some string constants used along the code
 FIRST_CONSENT = 'first_consent'
@@ -21,8 +23,16 @@ SECOND_CONSENT = 'second_consent'
 FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
 
+transcripts_cache = None
+TRANSCRIPTS_CACHE_FILE_NAME = 'transcripts_cache.json'
 
-debugging = False
+transcript_tasks_db = None
+TRANSCRIPT_TASKS_DB_FILE_NAME = 'transcript_tasks_db.json'
+
+question_analysis_db = None
+QUESTION_ANALYSIS_DB_FILE_NAME = 'question_analysis_db.json'
+
+debugging = True
 def print_if_debugging(text):
     if debugging:
         print(text)
@@ -306,13 +316,54 @@ class AnswerAnalyzer:
 
         return response, reason
 
+
+
+
+def compute_offset_and_duration(ta_row, first_q_offset=0, previous_ta_row=None, next_ta_row=None):
+    q_first_appeared = ta_row['First appeared (seconds into survey)']-first_q_offset
+
+    #Sometimes duration is longer than it should (given back and forths), so we will choose duration = difference between next q starting point and current one, if duration reported is too long.
+    q_duration = ta_row['Total duration (seconds)']
+
+    if next_ta_row is not None:
+        next_q_first_appeared = next_ta_row['First appeared (seconds into survey)']-first_q_offset
+
+        if next_q_first_appeared-q_first_appeared<q_duration and next_q_first_appeared!=q_first_appeared: #Be sure they dont have the same starting point (grouped questions)
+            q_duration = next_q_first_appeared-q_first_appeared
+
+    return q_first_appeared, q_duration+1
+
 class QuestionAnalyzer:
-    def __init__(self, ta_row, previous_ta_row, next_ta_row, survey_entrie_analyzer):
+    def __init__(self, survey_entrie_analyzer, ta_row, previous_ta_row=None, next_ta_row=None):
         self.ta_row = ta_row
         self.previous_ta_row = previous_ta_row
         self.next_ta_row = next_ta_row
         self.survey_entrie_analyzer = survey_entrie_analyzer
 
+        #Get question name, code, type, script
+        q_full_name = self.ta_row['Field name']
+        self.q_code = q_full_name.split('/')[-1]
+
+        self.q_type = questionnaire_texts.get_question_property(
+            self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
+            self.q_code,
+            'type')
+
+        #Check if current question is a repeated question (cause its in a repeat group)
+        if (self.previous_ta_row is not None and self.q_code == self.previous_ta_row['Field name'].split('/')[-1]) or \
+           (self.next_ta_row is not None and self.q_code == self.next_ta_row['Field name'].split('/')[-1]) :
+            self.repeate_group_q = True
+            self.survey_entrie_analyzer.increase_q_repetition(self.q_code)
+            self.repeated_q_number = self.survey_entrie_analyzer.repetitions_counter[self.q_code]
+        else:
+            self.repeate_group_q = False
+            self.repeated_q_number = 0
+
+        #Get question script
+        self.q_script = questionnaire_texts.get_question_property(
+            self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
+            self.q_code,
+            'label:spanish')
 
     def create_response_dict(self, answer_analyzer):
         response = {}
@@ -337,61 +388,28 @@ class QuestionAnalyzer:
 
         return response
 
-    def analyze_survey_question(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55, question_missing_threshold=0.8):
+    def analyze_question_transcript(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55, question_missing_threshold=0.8):
 
-        #Get question name, code, type
-        q_full_name = self.ta_row['Field name']
-        self.q_code = q_full_name.split('/')[-1]
-        print_if_debugging(f'q_code {self.q_code}')
-
-        self.q_type = questionnaire_texts.get_question_property(
-            self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
-            self.q_code,
-            'type')
-        print_if_debugging(f'q_type {self.q_type}')
-
-
-        #Do not check notes nor checkpoints
-        if  self.q_type == 'note' or 'checkpoint' in self.q_code:
-            print_if_debugging(f'Skipping question type {self.q_type}\n')
-            #Tell the transcript_generator to forget previous_transcript
-            transcript_generator.previous_transcript_to_none()
+        if not self.acceptable_question_type():
             return
 
-        #Get question script
-        self.q_script = questionnaire_texts.get_question_property(
-            self.survey_entrie_analyzer.audio_auditor.questionnaire_df,
-            self.q_code,
-            'label:spanish')
+        if not self.question_has_script():
+            return
 
-        if not self.q_script:
-            print_if_debugging(f"Didnt find question script for {self.q_code}")
-            return False
-        if len(self.q_script.replace(" ", ""))==0:
-            print_if_debugging(f"No question transcript (usually question contianed only instructions for surveyor) for {self.q_code}")
-            return False
-
-        print_if_debugging(f'question_script: {self.q_script}')
-        # print(f'len question_script: {len(self.q_script)}')
-
-        self.q_transcript = \
-            transcript_generator.generate_transcript(
-                project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
-                case_id = self.survey_entrie_analyzer.case_id,
-                q_code = self.q_code,
-                audio_url=self.survey_entrie_analyzer.audio_path,
-                language=self.survey_entrie_analyzer.audio_auditor.params['language'],
-                ta_row = self.ta_row,
-                previous_ta_row=self.previous_ta_row,
-                next_ta_row=self.next_ta_row,
-                first_q_offset=self.survey_entrie_analyzer.start_recording_ta_offset)
+        self.q_transcript = db_manager.get_element_from_database(
+            database = transcripts_cache,
+            project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+            case_id = self.survey_entrie_analyzer.case_id,
+            q_code = self.q_code,
+            repeate_group_q = self.repeate_group_q,
+            repeated_q_number = self.repeated_q_number)
 
         if not self.q_transcript:
-            print_if_debugging(f'Couldnt generate transcript for question {self.q_code}')
+            print_if_debugging(f'Couldnt find transcript in transcrips database for {self.q_code}')
             return False
 
         print_if_debugging(f'transcript: {self.q_transcript}')
-
+        print('')
         #Get % of script that was actually pronounced
         full_transcript = " ".join(self.q_transcript)
         self.perc_script_missing, self.words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
@@ -413,10 +431,90 @@ class QuestionAnalyzer:
 
         #Prepare response dict
         response = self.create_response_dict(answer_analyzer)
+        print(response)
+
+        print("$$$$$$")
 
         # print(f"Output for {response['question']} ready\n")
 
         return response
+
+
+    def acceptable_question_type(self):
+        #Do not check notes nor checkpoints
+        if  self.q_type == 'note' or 'checkpoint' in self.q_code:
+            # print_if_debugging(f'Skipping question type {self.q_type}\n')
+            #Tell the transcript_generator to forget previous_transcript
+            # transcript_generator.previous_transcript_to_none()
+            return False
+        else:
+            return True
+
+    def question_has_script(self):
+        if not self.q_script:
+            print_if_debugging(f"Didnt find question script for {self.q_code}")
+            return False
+        if len(self.q_script.replace(" ", ""))==0:
+            print_if_debugging(f"No question script (usually question contianed only instructions for surveyor) for {self.q_code}")
+            return False
+
+        return True
+
+    def create_transcript_task(self):
+
+        if not self.acceptable_question_type():
+            return
+
+        if not self.question_has_script():
+            return
+
+        #If transcript already exists, do not create task
+        if db_manager.get_element_from_database(
+            database = transcripts_cache,
+            project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+            case_id = self.survey_entrie_analyzer.case_id,
+            q_code = self.q_code,
+            repeate_group_q = self.repeate_group_q,
+            repeated_q_number = self.repeated_q_number) is not None:
+            print(f">>>Transcript found for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}")
+            return
+
+        #If task already exists, do not create it
+        if db_manager.get_element_from_database(
+            database = transcript_tasks_db,
+            project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+            case_id = self.survey_entrie_analyzer.case_id,
+            q_code = self.q_code,
+            repeate_group_q = self.repeate_group_q,
+            repeated_q_number = self.repeated_q_number) is not None:
+            print(f"<<<<Transcript task found for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}")
+            return
+
+        #Compute offset and duration
+        offset, duration = compute_offset_and_duration(
+            ta_row = self.ta_row,
+            first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset,
+            previous_ta_row= self.previous_ta_row,
+            next_ta_row = self.next_ta_row)
+
+        task_info = {
+            'audio_url':self.survey_entrie_analyzer.audio_path,
+            'language':self.survey_entrie_analyzer.audio_auditor.params['language'],
+            'offset':int(offset),
+            'duration':int(duration)
+            }
+
+        db_manager.save_to_db(
+            database = transcript_tasks_db,
+            database_file_name = TRANSCRIPT_TASKS_DB_FILE_NAME,
+            project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+            case_id = self.survey_entrie_analyzer.case_id,
+            q_code = self.q_code,
+            repeate_group_q = self.repeate_group_q,
+            repeated_q_number = self.repeated_q_number,
+            element_to_save=task_info)
+        print(f"*** Created transcript task for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}")
+
 
 class SurveyEntrieAnalyzer:
     def __init__(self, audio_auditor, survey_row):
@@ -426,6 +524,21 @@ class SurveyEntrieAnalyzer:
         self.audio_path = self.get_media_file_path(file_to_get = FULL_SURVEY)
         self.text_audit_df = self.get_text_audit_df()
         self.enumerator_id = self.survey_row[audio_auditor.params['col_enumerator_id']]
+
+        #To keep count of repeated questions
+        self.repetitions_counter = {}
+
+
+        #Text audit capture segments of the interview that are not recorded, particularly the first ones that has surveycto metadata
+        #We need to learn when does the recording start, and ends, relative to the beggining of the text audit
+        self.start_recording_ta_index, self.start_recording_ta_offset = self.get_when_recording_starts()
+        self.last_question_index = self.get_last_question_index()
+
+    def increase_q_repetition(self, q_code):
+        if q_code not in self.repetitions_counter:
+            self.repetitions_counter[q_code] = 1
+        else:
+            self.repetitions_counter[q_code] +=1
 
     def get_when_recording_starts(self):
         q_when_recording_starts_df = self.text_audit_df.loc[self.text_audit_df['Field name'] == self.audio_auditor.params['q_when_recording_starts']]
@@ -493,37 +606,32 @@ class SurveyEntrieAnalyzer:
         print(f"Full survey {self.survey_row[self.audio_auditor.params['col_full_survey_audio_audit_path']]}")
         print("********************************************************************")
 
-    def analyze_audio_recording(self):
 
-        # self.print_survey_info()
-
-        if not self.audio_path_exists():
-            return False
-
-        #Lets cut down audios for each questions according to text-audits timeframes
-
-        #Text audit capture segments of the interview that are not recorded, particularly the first ones that has surveycto metadata
-        #We need to learn when does the recording start, and ends, relative to the beggining of the text audit
-        start_recording_ta_index, self.start_recording_ta_offset = self.get_when_recording_starts()
-        last_question_index = self.get_last_question_index()
+    def analyze_survey_transcript(self):
 
         #Now we analyze each question, looping over the text audit entries
         q_results = []
-        previous_ta_row = None
-        next_ta_row = None
+        # previous_ta_row = None
+        # next_ta_row = None
         for index, ta_row in self.text_audit_df.iterrows():
 
             #Skip initial part of text audit which are not related to questions
-            if(index<start_recording_ta_index or index > last_question_index):
+            if(index<self.start_recording_ta_index or index > self.last_question_index):
                 continue
 
-            next_ta_row = self.text_audit_df.iloc[index+1]
-
-            q_analyzer = QuestionAnalyzer(ta_row, previous_ta_row, next_ta_row, self)
-
-            q_analysis_result = q_analyzer.analyze_survey_question()
+            # next_ta_row = self.text_audit_df.iloc[index+1]
+            q_analyzer = QuestionAnalyzer(self, ta_row)
+            q_analysis_result = q_analyzer.analyze_question_transcript()
             if q_analysis_result:
-                q_results.append(q_analysis_result)
+                db_manager.save_to_db(
+                    database=question_analysis_db,
+                    database_file_name=QUESTION_ANALYSIS_DB_FILE_NAME,
+                    project_name = self.audio_auditor.params['project_name'],
+                    case_id = self.case_id,
+                    q_code = q_analyzer.q_code,
+                    repeate_group_q = q_analyzer.repeate_group_q,
+                    repeated_q_number = q_analyzer.repeated_q_number,
+                    element_to_save = q_analysis_result)
 
             #Keep record of last row
             previous_ta_row = ta_row
@@ -551,40 +659,31 @@ class SurveyEntrieAnalyzer:
 
         print("")
 
+    def create_transcript_tasks(self):
+
+        if not self.audio_path_exists():
+            return False
+
+        #Now we create transcriptio task for each question, looping over the text audit entries
+        q_results = []
+        previous_ta_row = None
+        next_ta_row = None
+        for index, ta_row in self.text_audit_df.iterrows():
+
+            #Skip initial part of text audit which are not related to questions
+            if(index<self.start_recording_ta_index or index > self.last_question_index):
+                continue
+
+            next_ta_row = self.text_audit_df.iloc[index+1]
+
+            q_analyzer = QuestionAnalyzer(self, ta_row, previous_ta_row, next_ta_row)
+            q_analyzer.create_transcript_task()
+
+
 class AudioAuditor:
     def __init__(self, name, operating_system):
         self.params = aa_params.get_project_params(name, operating_system)
 
-    def get_completed_surveys(self, surveys_df):
-
-        #Filter to get only completed surveys
-        completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
-
-        #Filter to get surveys with submissiondates after launch day
-        if self.params['project_name'] == 'RECOVER_RD3_COL':
-            completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
-
-        #Rest index of new df
-        completed_surveys_df.reset_index(drop=True, inplace=True)
-
-        return completed_surveys_df
-
-    def filter_completed_surveys_to_only_selected_cases(self):
-
-        #If no specific list of cases for analysis was given, do nothing, we will analyze all of them
-        if 'cases_to_check' not in self.params:
-            return
-        else:
-            #Filter according to case id
-            selected_cases_ids = self.params['cases_to_check']
-            self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
-
-    def run_audio_audit(self):
-        '''
-        Given audio audits and a questionaire, it checks if the questions and
-        consenst were appropiately delivered, and if answers were appropiately
-        recorded
-        '''
         #Load survey data
         surveys_df, self.survey_label_dict, self.survey_value_label_dict = import_data(self.params['survey_df_path'])
 
@@ -596,122 +695,99 @@ class AudioAuditor:
 
         #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
         self.filter_completed_surveys_to_only_selected_cases()
-        n_rows_to_process = self.completed_surveys_df.shape[0]
 
-        print(f'n_rows_to_process {n_rows_to_process}')
+        self.sort_surveys_by_case_id_and_reset_index()
+
+        self.n_rows_to_process = self.completed_surveys_df.shape[0]
+
+
+    def get_completed_surveys(self, surveys_df):
+
+        #Filter to get only completed surveys
+        completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
+
+        #Filter to get surveys with submissiondates after launch day
+        if self.params['project_name'] == 'RECOVER_RD3_COL':
+            completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
+
+        return completed_surveys_df
+
+    def sort_surveys_by_case_id_and_reset_index(self):
+        self.completed_surveys_df = self.completed_surveys_df.sort_values(by=['caseid'])
+        self.completed_surveys_df.reset_index(drop=True, inplace=True)
+
+    def filter_completed_surveys_to_only_selected_cases(self):
+
+        #If no specific list of cases for analysis was given, do nothing, we will analyze all of them
+        if 'cases_to_check' not in self.params:
+            return
+        else:
+            #Filter according to case id
+            selected_cases_ids = self.params['cases_to_check']
+            self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
+
+    def create_all_surveys_transcript_tasks(self):
+        '''
+        Creates transcript tasks for questions that have no transcripts yet
+        '''
+        #Load transcripts cache
+        global transcripts_cache
+        transcripts_cache = db_manager.load_database(TRANSCRIPTS_CACHE_FILE_NAME)
+
+        #Load transcripts tasks
+        global transcript_tasks_db
+        transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
+
 
         #Analyze each survey
-        counter= 1
+        for index, survey_row in self.completed_surveys_df.head(self.n_rows_to_process).iterrows():
 
-        for index, survey_row in self.completed_surveys_df.head(n_rows_to_process).sort_values(by=['caseid']).iterrows():
             print('')
-            print(f"SURVEY {counter}/{n_rows_to_process}. Caseid {survey_row['caseid']}")
+            print(f"SURVEY {index}/{self.n_rows_to_process}. Caseid {survey_row['caseid']}")
 
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
-            survey_response_analyzer.analyze_audio_recording()
-            counter +=1
+            survey_response_analyzer.create_transcript_tasks()
+
+    def analyze_transcripts(self):
+        '''
+        Runs audits given transcripts are already created
+        '''
+        #Load transcripts cache
+        global transcripts_cache
+        transcripts_cache = db_manager.load_database(TRANSCRIPTS_CACHE_FILE_NAME)
+
+        #Load q analysis results db
+        global question_analysis_db
+        question_analysis_db = db_manager.load_database(QUESTION_ANALYSIS_DB_FILE_NAME)
+
+        for index, survey_row in self.completed_surveys_df.head(self.n_rows_to_process).iterrows():
+
+            print('')
+            print(f"SURVEY {index}/{self.n_rows_to_process}. Caseid {survey_row['caseid']}")
+
+            survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
+            survey_response_analyzer.analyze_survey_transcript()
 
 if __name__=='__main__':
 
     projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
 
+    tasks = {'1':'CREATE_TRANSCRIPTION_TASKS','2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS', '3':'ANALYZE_TRANSCRIPTS'}
+
     project_name = projects_ids_to_names[sys.argv[1]]
-    operating_system = sys.argv[2]
+    task = tasks[sys.argv[2]]
+    operating_system = sys.argv[3]
+
     print(project_name)
+    print(task)
 
     audio_auditor = AudioAuditor(project_name, operating_system)
 
-    audio_auditor.run_audio_audit()
-
-
-'''
-# Deprecated code.
-
-## Used in RD1 RECOVR COL to analyze consents. Should not be needed in other project.
-
-def process_consent_audio_audit(survey_part_to_process, survey_data, language, path_to_audio_audits_dir, read_appropiately_threshold=0.3):
-
-    audio_path = get_media_file_path(survey_data, path_to_audio_audits_dir,
-    survey_part_to_process)
-
-    if(not audio_path):
-        print_if_debugging("No audio_path")
-        return False
-
-    #Check audio exists
-    if not os.path.exists(audio_path):
-        print_if_debugging(f"Audio {audio_path} does not exist")
-        return False
-
-    transcript_sentences = transcript_generator.generate_transcript(audio_path, language)
-
-    question_script = questionnaire_texts.get_original_script(survey_part_to_process)
-    # print(f'Original_text:{original_text}')
-
-    full_transcript = " ".join(transcript_sentences)
-    perc_script_missing, words_missing = text_differences.compute_perc_script_missing(question_script, full_transcript, language)
-
-    #Check if participation consent question is present in last 3 phrases of transcript
-    # participation_concent_question_present = check_if_participation_consent_question_is_present(" ".join(transcript_sentences[-3:]), language)
-
-    #Check if consent yes response is present in last 2 phrases of transcript
-    acceptance_present = \
-        check_if_respondent_acceptance_is_present(" ".join(transcript_sentences[-2:]),
-                                                    language)
-
-    return_dict = {}
-    return_dict['question'] = survey_part_to_process
-    return_dict['read_appropiately'] = perc_script_missing<read_appropiately_threshold
-
-    # return_dict['participation_concent_question_present'] = participation_concent_question_present
-    return_dict['recording_concent_question_present'] = True #Default true given that first consent does not have recording q
-    return_dict['acceptance_present'] = acceptance_present
-
-    if return_dict['read_appropiately'] is False:
-        return_dict['perc_script_missing'] = perc_script_missing
-        return_dict['q_words_missing'] = words_missing
-        return_dict['q_and_ans_transcript'] = transcript_sentences
-        return_dict['q_script'] = question_script
-    else:
-        for key in ['perc_script_missing', 'q_words_missing', 'q_and_ans_transcript', 'q_script']:
-             return_dict[key]=""
-
-
-    if survey_part_to_process == SECOND_CONSENT:
-        #Check if recording consent question is present in last 3 phrases of transcript
-        recording_concent_question_present = check_if_recording_consent_question_is_present(" ".join(transcript_sentences[-3:]), language)
-        return_dict['recording_concent_question_present']=recording_concent_question_present
-
-    return return_dict
-
-
-def check_if_respondent_acceptance_is_present(transcript, language):
-    yes_keywords = get_yes_keywords(language)
-    return check_if_keywords_are_present(transcript, yes_keywords)
-
-def check_if_participation_consent_question_is_present(transcript, language):
-    consent_keywords = ['participar', 'contestar']
-    return check_if_keywords_are_present(transcript, consent_keywords)
-
-def check_if_recording_consent_question_is_present(transcript, language):
-    recording_keywords = ['grabar', 'grabemos', 'grabe', 'grabada']
-    return check_if_keywords_are_present(transcript, recording_keywords)
-
-def check_if_keywords_are_present(transcript, keywords, amount_of_words_to_check = 20):
-    #Check if any of keywords is present in any of the last x words of the transcript
-    #x depending what part of survey are we checking
-    #Clean last x words
-    exclude = set(string.punctuation)
-    def clean_word(word):
-        no_punctuation = ''.join(ch for ch in word if ch not in exclude)
-        lower_case = no_punctuation.lower()
-        return lower_case
-
-    last_x_words = " ".join([clean_word(s) for s in transcript.split(' ')[-amount_of_words_to_check:]])
-
-    #Check if any keyword is present in last 10 words
-    for keyword in keywords:
-        if keyword in last_x_words:
-            return True
-    return False
-'''
+    if task == 'CREATE_TRANSCRIPTION_TASKS':
+        audio_auditor.create_all_surveys_transcript_tasks()
+    elif task == 'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS':
+        audio_auditor.launch_azure_batch_transcriptions()
+    elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
+        audio_auditor.receive_azure_batch_transcriptions()
+    elif task == 'ANALYZE_TRANSCRIPTS':
+        audio_auditor.analyze_transcripts()
