@@ -18,6 +18,8 @@ from outputs_writer import save_df_to_excel
 import db_manager
 import report_generation
 
+from file_names import *
+
 #Some string constants used along the code
 FIRST_CONSENT = 'first_consent'
 SECOND_CONSENT = 'second_consent'
@@ -25,13 +27,13 @@ FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
 
 transcripts_cache = None
-TRANSCRIPTS_CACHE_FILE_NAME = os.path.join('Databases', 'transcripts_cache.json')
+
+
 
 transcript_tasks_db = None
-TRANSCRIPT_TASKS_DB_FILE_NAME = os.path.join('Databases', 'transcript_tasks_db.json')
 
 question_analysis_db = None
-QUESTION_ANALYSIS_DB_FILE_NAME = os.path.join('Databases', 'question_analysis_db.json')
+
 
 debugging = False
 def print_if_debugging(text):
@@ -507,7 +509,8 @@ class QuestionAnalyzer:
             'audio_url':self.survey_entrie_analyzer.audio_path,
             'language':self.survey_entrie_analyzer.audio_auditor.params['language'],
             'offset':int(offset),
-            'duration':int(duration)
+            'duration':int(duration),
+            'status':'PENDING'
             }
 
         db_manager.save_to_db(
@@ -726,6 +729,14 @@ class AudioAuditor:
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
             survey_response_analyzer.create_transcript_tasks()
 
+    def upload_transcript_tasks_audio_files(self, trancript_engine):
+        transcript_generator.upload_transcript_tasks_audio_files(trancript_engine)
+
+
+
+
+
+
     def analyze_all_survey_transcripts(self):
         '''
         Runs audits given transcripts are already created
@@ -752,7 +763,7 @@ if __name__=='__main__':
 
     tasks = {
         '1':'CREATE_TRANSCRIPTION_TASKS',
-        '2':'LAUNCH_TRANSCRIPT_TASKS',
+        '2':'UPLOAD_TRANSCRIPT_AUDIO_FILES',
         '3':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
         '4':'ANALYZE_TRANSCRIPTS',
         '5':'CREATE_REPORTS',
@@ -769,8 +780,10 @@ if __name__=='__main__':
 
     if task == 'CREATE_TRANSCRIPTION_TASKS':
         audio_auditor.create_all_surveys_transcript_tasks()
+    elif task == 'UPLOAD_TRANSCRIPT_AUDIO_FILES':
+        audio_auditor.upload_transcript_tasks_audio_files(trancript_engine = 'azure_batch')
     elif task == 'LAUNCH_TRANSCRIPT_TASKS':
-        audio_auditor.launch_transcript_tasks()
+        audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch')
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
         audio_auditor.receive_azure_batch_transcriptions()
     elif task == 'ANALYZE_TRANSCRIPTS':

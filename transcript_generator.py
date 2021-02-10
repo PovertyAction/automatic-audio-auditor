@@ -3,6 +3,9 @@ from pydub import AudioSegment
 import numpy as np
 import azure_transcribe
 import json
+import db_manager
+from file_names import *
+import azure_file_management
 
 abbreviations = {
     'Ppal.': 'principal',
@@ -172,6 +175,64 @@ def check_cache_has_transcript(project_name, case_id, question_code):
         return True
     else:
         return False
+
+
+def create_choped_wav(audio_url, offset, duration):
+
+    #Read file
+    sound = AudioSegment.from_file(audio_url)
+
+    #Chop sound according to offset and duration given
+    if offset is not None and duration is not None:
+      sound = sound[offset*1000:(offset+duration)*1000]##pydub works in milliseconds
+
+    #Transform to .wav
+    AUDIO_FILE_WAV = "transcript.wav"
+    out = sound.export(AUDIO_FILE_WAV, format="wav")
+    out.close()
+    return AUDIO_FILE_WAV
+
+def upload_transcript_tasks_audio_files(trancript_engine):
+
+    #Load transcripts tasks
+    global transcript_tasks_db
+    transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+    if trancript_engine == 'azure_batch':
+
+        #Filter to only pending tasks
+        pending_transcript_tasks = []
+        for project in transcript_tasks_db.keys():
+            for case_id in transcript_tasks_db[project].keys():
+                for q_code in transcript_tasks_db[project][case_id].keys():
+
+                    if transcript_tasks_db[project][case_id][q_code]['status']=='PENDING':
+
+                        task = transcript_tasks_db[project][case_id][q_code]
+
+                        #Create audio file for this task
+                        choped_wav_file_path = create_choped_wav(
+                            audio_url = task['audio_url'],
+                            offset = task['offset'],
+                            duration = task['duration'])
+
+                        #Upload files to container
+                        blob_name = f'{project}_{case_id}_{q_code}'
+
+                        upload_status = azure_file_management.upload_blob(
+                            file_path = choped_wav_file_path,
+                            blob_name = blob_name)
+
+                        #Remove audio chop
+                        os.remove(choped_wav_file_path)
+
+                        #Change task status
+                        transcript_tasks_db[project][case_id][q_code]['status'] = 'DATA_UPLOADED'
+                        db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+                        if not upload_status:
+                            print(f'Error when uploading {project} {case_id} {q_code}')
+
 
 if __name__ =='__main__':
 
