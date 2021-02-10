@@ -673,40 +673,36 @@ class AudioAuditor:
         self.questionnaire_df = pd.read_excel(self.params['questionnaire_path'])
 
         #Get survey attempts that where completed
-        self.completed_surveys_df = self.get_completed_surveys(surveys_df)
+        def get_completed_surveys(surveys_df):
+
+            #Filter to get only completed surveys
+            completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
+
+            #Filter to get surveys with submissiondates after launch day
+            if self.params['project_name'] == 'RECOVER_RD3_COL':
+                completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
+
+            return completed_surveys_df
+        self.completed_surveys_df = get_completed_surveys(surveys_df)
 
         #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
-        self.filter_completed_surveys_to_only_selected_cases()
+        def filter_completed_surveys_to_only_selected_cases():
 
-        self.sort_surveys_by_case_id_and_reset_index()
+            #If no specific list of cases for analysis was given, do nothing, we will analyze all of them
+            if 'cases_to_check' not in self.params:
+                return
+            else:
+                #Filter according to case id
+                selected_cases_ids = self.params['cases_to_check']
+                self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
+        filter_completed_surveys_to_only_selected_cases()
+
+        def sort_surveys_by_case_id_and_reset_index():
+            self.completed_surveys_df = self.completed_surveys_df.sort_values(by=['caseid'])
+            self.completed_surveys_df.reset_index(drop=True, inplace=True)
+        sort_surveys_by_case_id_and_reset_index()
 
         self.n_rows_to_process = self.completed_surveys_df.shape[0]
-
-
-    def get_completed_surveys(self, surveys_df):
-
-        #Filter to get only completed surveys
-        completed_surveys_df = surveys_df[surveys_df[self.params['col_survey_status']]==self.params['string_completed_survey']]
-
-        #Filter to get surveys with submissiondates after launch day
-        if self.params['project_name'] == 'RECOVER_RD3_COL':
-            completed_surveys_df = completed_surveys_df[completed_surveys_df['versionform']>='2011172035']
-
-        return completed_surveys_df
-
-    def sort_surveys_by_case_id_and_reset_index(self):
-        self.completed_surveys_df = self.completed_surveys_df.sort_values(by=['caseid'])
-        self.completed_surveys_df.reset_index(drop=True, inplace=True)
-
-    def filter_completed_surveys_to_only_selected_cases(self):
-
-        #If no specific list of cases for analysis was given, do nothing, we will analyze all of them
-        if 'cases_to_check' not in self.params:
-            return
-        else:
-            #Filter according to case id
-            selected_cases_ids = self.params['cases_to_check']
-            self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
 
     def create_all_surveys_transcript_tasks(self):
         '''
@@ -756,7 +752,7 @@ if __name__=='__main__':
 
     tasks = {
         '1':'CREATE_TRANSCRIPTION_TASKS',
-        '2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS',
+        '2':'LAUNCH_TRANSCRIPT_TASKS',
         '3':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
         '4':'ANALYZE_TRANSCRIPTS',
         '5':'CREATE_REPORTS',
@@ -773,8 +769,8 @@ if __name__=='__main__':
 
     if task == 'CREATE_TRANSCRIPTION_TASKS':
         audio_auditor.create_all_surveys_transcript_tasks()
-    elif task == 'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS':
-        audio_auditor.launch_azure_batch_transcriptions()
+    elif task == 'LAUNCH_TRANSCRIPT_TASKS':
+        audio_auditor.launch_transcript_tasks()
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
         audio_auditor.receive_azure_batch_transcriptions()
     elif task == 'ANALYZE_TRANSCRIPTS':
