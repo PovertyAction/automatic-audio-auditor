@@ -16,6 +16,7 @@ from text_to_num import alpha2digit
 
 from outputs_writer import save_df_to_excel
 import db_manager
+import report_generation
 
 #Some string constants used along the code
 FIRST_CONSENT = 'first_consent'
@@ -420,7 +421,6 @@ class QuestionAnalyzer:
             print_if_debugging(f'Couldnt find transcript in transcrips database for {self.q_code}')
             return False
 
-        print_if_debugging(f'transcript: {self.q_transcript}')
         #Get % of script that was actually pronounced
         full_transcript = " ".join(self.q_transcript)
         self.perc_script_missing, self.words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
@@ -442,11 +442,6 @@ class QuestionAnalyzer:
 
         #Prepare response dict
         response = self.create_response_dict(answer_analyzer)
-        # print(response)
-
-        # print("$$$$$$")
-
-        # print(f"Output for {response['question']} ready\n")
 
         return response
 
@@ -644,30 +639,6 @@ class SurveyEntrieAnalyzer:
                     repeated_q_number = q_analyzer.repeated_q_number,
                     element_to_save = q_analysis_result)
 
-            #Keep record of last row
-            # previous_ta_row = ta_row
-
-        # #NEED TO MOVE THIS TO DIF METHOD
-        # #Save sorted results in a .xlsx
-        # if len(q_results)>0:
-        #     results_df = pd.DataFrame()
-        #     results_df = results_df.append(q_results, ignore_index=True)
-        #
-        #
-        #
-        #     #Change columns names
-        #     results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
-        #
-        #     #Define columns that should be wide or narrow when saving df to xlsx
-        #     short_entries_cols_index = [0,1,4,5,6,10,12]
-        #     medium_entries_cols_index = [2,3,7,11]
-        #     long_entries_cols_index = [8,9,13,14]
-        #
-        #     save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df,
-        #         short_entries_cols_index=short_entries_cols_index,
-        #         medium_entries_cols_index=medium_entries_cols_index,
-        #         long_entries_cols_index=long_entries_cols_index,
-        #         sort_descending_by = 'Perc. of Q script missing')
 
 
     def create_transcript_tasks(self):
@@ -783,7 +754,13 @@ if __name__=='__main__':
 
     projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
 
-    tasks = {'1':'CREATE_TRANSCRIPTION_TASKS','2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS', '4':'ANALYZE_TRANSCRIPTS'}
+    tasks = {
+        '1':'CREATE_TRANSCRIPTION_TASKS',
+        '2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS',
+        '3':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
+        '4':'ANALYZE_TRANSCRIPTS',
+        '5':'CREATE_REPORTS',
+        }
 
     project_name = projects_ids_to_names[sys.argv[1]]
     task = tasks[sys.argv[2]]
@@ -802,3 +779,5 @@ if __name__=='__main__':
         audio_auditor.receive_azure_batch_transcriptions()
     elif task == 'ANALYZE_TRANSCRIPTS':
         audio_auditor.analyze_all_survey_transcripts()
+    elif task == 'CREATE_REPORTS':
+        report_generation.generate_reports(project_params = audio_auditor.params)

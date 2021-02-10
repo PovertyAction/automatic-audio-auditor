@@ -1,28 +1,27 @@
 import pandas as pd
+import os
 from os import listdir
-from os.path import isfile, join
-from varname import nameof
+from os.path import isfile
 import outputs_writer
 import sys
 from name_reports_columns import *
 import aa_params
+import db_manager
 
 def get_concatenated_cases_reports(cases_reports_path, project_params):
 
     #Create list of cases id file reports
     #Filter to only certain cases ids if cases_to_check param is given
     if 'cases_to_check' in project_params:
-        reports_paths = [join(cases_reports_path, f) \
+        reports_paths = [os.path.join(cases_reports_path, f) \
                         for f in listdir(cases_reports_path) \
-                        if isfile(join(cases_reports_path, f)) and \
+                        if isfile(os.path.join(cases_reports_path, f)) and \
                             f.split('_')[0] in project_params['cases_to_check']]
         print('Will generate report for only certain cases ids')
     else:
-        reports_paths = [join(cases_reports_path, f) \
+        reports_paths = [os.path.join(cases_reports_path, f) \
                     for f in listdir(cases_reports_path) \
-                    if isfile(join(cases_reports_path, f))]
-
-
+                    if isfile(os.path.join(cases_reports_path, f))]
 
     reports_dfs_list = []
     for report_path in reports_paths:
@@ -34,7 +33,7 @@ def get_concatenated_cases_reports(cases_reports_path, project_params):
 
     return all_results
 
-def generate_surveyor_level_report(cases_reports_df):
+def generate_surveyor_level_report(path_to_project_reports, cases_reports_df):
 
     #Identify all unique surveyors
     enumerators_ids = cases_reports_df[col_enum_id].unique()
@@ -110,14 +109,13 @@ def generate_surveyor_level_report(cases_reports_df):
 
 
     outputs_writer.save_df_to_excel(
-        saving_path = 'Surveyor Level Report.xlsx',
+        saving_path = os.path.join(path_to_project_reports, 'Surveyor Level Report.xlsx'),
         df_to_save = reports_df,
         short_entries_cols_index=short_entries_cols_index,
         medium_entries_cols_index=medium_entries_cols_index,
         long_entries_cols_index=long_entries_cols_index)
 
-def generate_question_level_report(cases_reports_df):
-
+def generate_question_level_report(path_to_project_reports, cases_reports_df):
 
     def get_q_stats(question_code, cases_reports_df):
 
@@ -156,34 +154,92 @@ def generate_question_level_report(cases_reports_df):
 
         reports_df.loc[i] = row
 
-    outputs_writer.save_df_to_excel('Question Level Report.xlsx', reports_df, medium_entries_cols_index=[0,1,2], sort_descending_by=col_q_missing)
+    outputs_writer.save_df_to_excel(
+        saving_path = os.path.join(path_to_project_reports, 'Question Level Report.xlsx'),
+        df_to_save = reports_df,
+        medium_entries_cols_index=[0,1,2],
+        sort_descending_by=col_q_missing)
 
-def generate_report(cases_reports_path, project_params):
-    #Import all casesid reports to one df
-    cases_reports_df = get_concatenated_cases_reports(cases_reports_path, project_params)
+def generate_case_level_reports(path_to_project_reports, project_name):
+
+    #Create cases folder
+    path_to_cases_reports = os.path.join(path_to_project_reports, 'Cases Reports')
+    if not os.path.exists(path_to_cases_reports):
+        os.makedirs(path_to_cases_reports)
+
+    project_question_analysis_db = \
+        db_manager.load_database('question_analysis_db.json')[project_name]
+
+    #For each case, create a report
+    for case_id in project_question_analysis_db.keys():
+
+        #Transform json to list
+        q_results = []
+
+        for q_code in project_question_analysis_db[case_id].keys():
+            q_results.append(project_question_analysis_db[case_id][q_code])
+
+        print(q_results)
+
+        #Save results in a .xlsx
+        if len(q_results)>0:
+            results_df = pd.DataFrame()
+            results_df = results_df.append(q_results, ignore_index=True)
+
+            #Change columns names
+            results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
+
+            #Define columns that should be wide or narrow when saving df to xlsx
+            short_entries_cols_index = [0,1,4,5,6,10,12]
+            medium_entries_cols_index = [2,3,7,11]
+            long_entries_cols_index = [8,9,13,14]
+
+            outputs_writer.save_df_to_excel(
+                saving_path = os.path.join(path_to_cases_reports, case_id+'_results.xlsx'),
+                df_to_save = results_df,
+                short_entries_cols_index=short_entries_cols_index,
+                medium_entries_cols_index=medium_entries_cols_index,
+                long_entries_cols_index=long_entries_cols_index,
+                sort_descending_by = 'Perc. of Q script missing')
+
+
+def generate_and_save_all_cases_report(path_to_project_reports, project_params):
+
+    cases_reports_df = get_concatenated_cases_reports(os.path.join(path_to_project_reports, 'Cases Reports'), project_params)
 
     outputs_writer.save_df_to_excel(
-        saving_path = 'All cases.xlsx',
+        saving_path = os.path.join(path_to_project_reports,'All cases.xlsx'),
         df_to_save = cases_reports_df,
         short_entries_cols_index=[0,1,4,5,6,10,12],
         medium_entries_cols_index=[2,3,7,11],
         long_entries_cols_index=[8,9,13,14],
         sort_descending_by=col_perc_q_missing)
 
+    return cases_reports_df
 
-    generate_surveyor_level_report(cases_reports_df)
+def generate_reports(project_params):
 
-    generate_question_level_report(cases_reports_df)
+    #Create folder structure
+    path_to_project_reports = os.path.join('Reports', project_params['project_name'])
+    if not os.path.exists(path_to_project_reports):
+        os.makedirs(path_to_project_reports)
+
+    generate_case_level_reports(path_to_project_reports, project_params['project_name'])
+
+    cases_reports_df = generate_and_save_all_cases_report(path_to_project_reports, project_params)
+
+    generate_surveyor_level_report(path_to_project_reports, cases_reports_df)
+
+    generate_question_level_report(path_to_project_reports, cases_reports_df)
 
 if __name__ == '__main__':
 
-    cases_reports_path = 'Caseid_reports'
-
     projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
-
     project_name = projects_ids_to_names[sys.argv[1]]
+
+    operating_system = sys.argv[2]
     print(project_name)
 
-    project_params = aa_params.get_project_params(project_name)
+    project_params = aa_params.get_project_params(project_name, operating_system)
 
-    generate_report(cases_reports_path, project_params)
+    generate_reports(project_params)
