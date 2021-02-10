@@ -25,13 +25,13 @@ FULL_SURVEY = 'full_survey'
 TEXT_AUDIT = 'text_audit'
 
 transcripts_cache = None
-TRANSCRIPTS_CACHE_FILE_NAME = 'transcripts_cache.json'
+TRANSCRIPTS_CACHE_FILE_NAME = os.path.join('Databases', 'transcripts_cache.json')
 
 transcript_tasks_db = None
-TRANSCRIPT_TASKS_DB_FILE_NAME = 'transcript_tasks_db.json'
+TRANSCRIPT_TASKS_DB_FILE_NAME = os.path.join('Databases', 'transcript_tasks_db.json')
 
 question_analysis_db = None
-QUESTION_ANALYSIS_DB_FILE_NAME = 'question_analysis_db.json'
+QUESTION_ANALYSIS_DB_FILE_NAME = os.path.join('Databases', 'question_analysis_db.json')
 
 debugging = False
 def print_if_debugging(text):
