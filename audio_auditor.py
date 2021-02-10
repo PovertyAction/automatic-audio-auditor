@@ -32,7 +32,7 @@ TRANSCRIPT_TASKS_DB_FILE_NAME = 'transcript_tasks_db.json'
 question_analysis_db = None
 QUESTION_ANALYSIS_DB_FILE_NAME = 'question_analysis_db.json'
 
-debugging = True
+debugging = False
 def print_if_debugging(text):
     if debugging:
         print(text)
@@ -391,11 +391,23 @@ class QuestionAnalyzer:
     def analyze_question_transcript(self, read_appropiately_threshold=0.4, read_appropiately_threshold_short_questions=0.55, question_missing_threshold=0.8):
 
         if not self.acceptable_question_type():
-            return
+            return None
 
         if not self.question_has_script():
-            return
+            return None
 
+        #If question is already analyzed, skip
+        if db_manager.get_element_from_database(
+            database = question_analysis_db,
+            project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
+            case_id = self.survey_entrie_analyzer.case_id,
+            q_code = self.q_code,
+            repeate_group_q = self.repeate_group_q,
+            repeated_q_number = self.repeated_q_number) is not None:
+            print(f"!!Analysis found for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}.")
+            return None
+
+        #Get question transcript
         self.q_transcript = db_manager.get_element_from_database(
             database = transcripts_cache,
             project_name = self.survey_entrie_analyzer.audio_auditor.params['project_name'],
@@ -409,7 +421,6 @@ class QuestionAnalyzer:
             return False
 
         print_if_debugging(f'transcript: {self.q_transcript}')
-        print('')
         #Get % of script that was actually pronounced
         full_transcript = " ".join(self.q_transcript)
         self.perc_script_missing, self.words_missing = text_differences.compute_perc_script_missing(self.q_script, self.q_transcript, self.survey_entrie_analyzer.audio_auditor.params['language'])
@@ -431,9 +442,9 @@ class QuestionAnalyzer:
 
         #Prepare response dict
         response = self.create_response_dict(answer_analyzer)
-        print(response)
+        # print(response)
 
-        print("$$$$$$")
+        # print("$$$$$$")
 
         # print(f"Output for {response['question']} ready\n")
 
@@ -634,30 +645,30 @@ class SurveyEntrieAnalyzer:
                     element_to_save = q_analysis_result)
 
             #Keep record of last row
-            previous_ta_row = ta_row
+            # previous_ta_row = ta_row
 
-        #Save sorted results in a .xlsx
-        if len(q_results)>0:
-            results_df = pd.DataFrame()
-            results_df = results_df.append(q_results, ignore_index=True)
+        # #NEED TO MOVE THIS TO DIF METHOD
+        # #Save sorted results in a .xlsx
+        # if len(q_results)>0:
+        #     results_df = pd.DataFrame()
+        #     results_df = results_df.append(q_results, ignore_index=True)
+        #
+        #
+        #
+        #     #Change columns names
+        #     results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
+        #
+        #     #Define columns that should be wide or narrow when saving df to xlsx
+        #     short_entries_cols_index = [0,1,4,5,6,10,12]
+        #     medium_entries_cols_index = [2,3,7,11]
+        #     long_entries_cols_index = [8,9,13,14]
+        #
+        #     save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df,
+        #         short_entries_cols_index=short_entries_cols_index,
+        #         medium_entries_cols_index=medium_entries_cols_index,
+        #         long_entries_cols_index=long_entries_cols_index,
+        #         sort_descending_by = 'Perc. of Q script missing')
 
-
-
-            #Change columns names
-            results_df.columns = ['Enum ID', 'Case ID', 'Question code', 'Time Q appears in audio', 'Question missing?', 'Question read inappropiately?', 'Perc. of Q script missing', 'Q words missing', 'Q script', 'Q transcript', 'Congruity between respondents answer and surveyCTO', 'Reason for (in)congruity', 'surveyCTO answer', 'Audio file path', 'Text audit file path']
-
-            #Define columns that should be wide or narrow when saving df to xlsx
-            short_entries_cols_index = [0,1,4,5,6,10,12]
-            medium_entries_cols_index = [2,3,7,11]
-            long_entries_cols_index = [8,9,13,14]
-
-            save_df_to_excel('Caseid_reports/'+self.case_id+'_results.xlsx', results_df,
-                short_entries_cols_index=short_entries_cols_index,
-                medium_entries_cols_index=medium_entries_cols_index,
-                long_entries_cols_index=long_entries_cols_index,
-                sort_descending_by = 'Perc. of Q script missing')
-
-        print("")
 
     def create_transcript_tasks(self):
 
@@ -748,7 +759,7 @@ class AudioAuditor:
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
             survey_response_analyzer.create_transcript_tasks()
 
-    def analyze_transcripts(self):
+    def analyze_all_survey_transcripts(self):
         '''
         Runs audits given transcripts are already created
         '''
@@ -772,7 +783,7 @@ if __name__=='__main__':
 
     projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
 
-    tasks = {'1':'CREATE_TRANSCRIPTION_TASKS','2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS', '3':'ANALYZE_TRANSCRIPTS'}
+    tasks = {'1':'CREATE_TRANSCRIPTION_TASKS','2':'LAUNCH_AZURE_BATCH_TRANSCRIPTIONS', '4':'ANALYZE_TRANSCRIPTS'}
 
     project_name = projects_ids_to_names[sys.argv[1]]
     task = tasks[sys.argv[2]]
@@ -790,4 +801,4 @@ if __name__=='__main__':
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
         audio_auditor.receive_azure_batch_transcriptions()
     elif task == 'ANALYZE_TRANSCRIPTS':
-        audio_auditor.analyze_transcripts()
+        audio_auditor.analyze_all_survey_transcripts()
