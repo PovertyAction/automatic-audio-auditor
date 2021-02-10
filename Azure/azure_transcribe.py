@@ -1,7 +1,7 @@
 # Reference: https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/get-started-speech-to-text?tabs=script%2Cwindowsinstall&pivots=programming-language-python
 import azure.cognitiveservices.speech as speechsdk
 import time
-from azure_keys import get_speech_key, get_service_region
+from .azure_keys import get_speech_key, get_service_region
 
 #Parameters
 speech_key = get_speech_key()

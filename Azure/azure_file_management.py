@@ -1,6 +1,6 @@
 
 import os
-from azure_keys import get_connection_string
+from .azure_keys import get_connection_string
 
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob import BlobClient

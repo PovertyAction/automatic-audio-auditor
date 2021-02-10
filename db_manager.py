@@ -30,6 +30,23 @@ def get_element_from_database(database, project_name, case_id, q_code, repeate_g
         return None
 
 
+def save_db(database, database_file_name):
+    #Save dictionary to json
+    #We will use a temporary file copy so as to make it an atomic operation
+    #reference: https://stackoverflow.com/questions/2333872/how-to-make-file-creation-an-atomic-operation
+
+    #Create temp_file
+    tmp_file = open(os.path.join('Databases', 'tmp_file.json'), 'w')
+    #Copy data to temp_file
+    json.dump(database, tmp_file)
+    #Be sure to finish writing all data
+    tmp_file.flush()
+    os.fsync(tmp_file.fileno())
+    #Close file
+    tmp_file.close()
+    #Rename file
+    os.rename(os.path.join('Databases', 'tmp_file.json'), database_file_name)
+
 def save_to_db(
     database,
     database_file_name,
@@ -52,23 +69,4 @@ def save_to_db(
 
     database[project_name][case_id][q_code] = element_to_save
 
-    #Save dictionary to json
-    #We will use a temporary file copy so as to make it an atomic operation
-    #reference: https://stackoverflow.com/questions/2333872/how-to-make-file-creation-an-atomic-operation
-
-    #Create temp_file
-    tmp_file = open(os.path.join('Databases', 'tmp_file.json'), 'w')
-    #Copy data to temp_file
-    json.dump(database, tmp_file)
-    #Be sure to finish writing all data
-    tmp_file.flush()
-    os.fsync(tmp_file.fileno())
-    #Close file
-    tmp_file.close()
-    #Rename file
-    os.rename(os.path.join('Databases', 'tmp_file.json'), database_file_name)
-
-
-    # with open(database_file_name, "w") as database_file:
-    #     json.dump(database, database_file)
-    #     database_file.close()
+    save_db(database, database_file_name)

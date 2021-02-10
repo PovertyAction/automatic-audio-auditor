@@ -1,11 +1,14 @@
 import os
 from pydub import AudioSegment
 import numpy as np
-import azure_transcribe
 import json
 import db_manager
 from file_names import *
-import azure_file_management
+
+
+from Azure import azure_file_management
+from Azure import azure_transcribe
+from Azure import azure_batch_transcribe
 
 abbreviations = {
     'Ppal.': 'principal',
@@ -192,6 +195,51 @@ def create_choped_wav(audio_url, offset, duration):
     out.close()
     return AUDIO_FILE_WAV
 
+
+def launch_transcript_tasks(trancript_engine, language):
+
+    #Load transcripts tasks
+    global transcript_tasks_db
+    transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+    if trancript_engine == 'azure_batch':
+
+        azure_batch_transcribe.transcribe(locale=language, recordings_container_uri = 'https://backchecker.blob.core.windows.net/mycontainer')
+
+
+
+        # #Find tasks with data already uploaded
+        # for project in transcript_tasks_db.keys():
+        #     for case_id in transcript_tasks_db[project].keys():
+        #         for q_code in transcript_tasks_db[project][case_id].keys():
+        #
+        #             if transcript_tasks_db[project][case_id][q_code]['status']=='PENDING':
+        #
+        #                 task = transcript_tasks_db[project][case_id][q_code]
+        #
+        #                 #Create audio file for this task
+        #                 choped_wav_file_path = create_choped_wav(
+        #                     audio_url = task['audio_url'],
+        #                     offset = task['offset'],
+        #                     duration = task['duration'])
+        #
+        #                 #Upload files to container
+        #                 blob_name = f'{project}_{case_id}_{q_code}'
+        #
+        #                 upload_status = azure_file_management.upload_blob(
+        #                     file_path = choped_wav_file_path,
+        #                     blob_name = blob_name)
+        #
+        #                 #Remove audio chop
+        #                 os.remove(choped_wav_file_path)
+        #
+        #                 #Change task status
+        #                 transcript_tasks_db[project][case_id][q_code]['status'] = 'DATA_UPLOADED'
+        #                 db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+        #
+        #                 if not upload_status:
+        #                     print(f'Error when uploading {project} {case_id} {q_code}')
+
 def upload_transcript_tasks_audio_files(trancript_engine):
 
     #Load transcripts tasks
@@ -200,8 +248,7 @@ def upload_transcript_tasks_audio_files(trancript_engine):
 
     if trancript_engine == 'azure_batch':
 
-        #Filter to only pending tasks
-        pending_transcript_tasks = []
+        #Find tasks in pending status
         for project in transcript_tasks_db.keys():
             for case_id in transcript_tasks_db[project].keys():
                 for q_code in transcript_tasks_db[project][case_id].keys():

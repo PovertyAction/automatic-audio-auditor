@@ -28,8 +28,6 @@ TEXT_AUDIT = 'text_audit'
 
 transcripts_cache = None
 
-
-
 transcript_tasks_db = None
 
 question_analysis_db = None
@@ -733,8 +731,8 @@ class AudioAuditor:
         transcript_generator.upload_transcript_tasks_audio_files(trancript_engine)
 
 
-
-
+    def launch_transcript_tasks(self, trancript_engine, language):
+        transcript_generator.launch_transcript_tasks(trancript_engine, language)
 
 
     def analyze_all_survey_transcripts(self):
@@ -764,7 +762,7 @@ if __name__=='__main__':
     tasks = {
         '1':'CREATE_TRANSCRIPTION_TASKS',
         '2':'UPLOAD_TRANSCRIPT_AUDIO_FILES',
-        '3':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
+        '3':'LAUNCH_TRANSCRIPT_TASKS',
         '4':'ANALYZE_TRANSCRIPTS',
         '5':'CREATE_REPORTS',
         }
@@ -783,7 +781,7 @@ if __name__=='__main__':
     elif task == 'UPLOAD_TRANSCRIPT_AUDIO_FILES':
         audio_auditor.upload_transcript_tasks_audio_files(trancript_engine = 'azure_batch')
     elif task == 'LAUNCH_TRANSCRIPT_TASKS':
-        audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch')
+        audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch', language = audio_auditor.params['language'])
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
         audio_auditor.receive_azure_batch_transcriptions()
     elif task == 'ANALYZE_TRANSCRIPTS':
