@@ -158,18 +158,6 @@ def generate_transcript(project_name, case_id, q_code, audio_url, language, firs
     print_if_debugging(f'Transcript {transcription_no_abb}')
     return transcription_no_abb
 
-def load_transcripts_cache():
-    global transcripts_cache
-
-    #If transcripts cache json file does not exist, create it
-    if not os.path.exists('transcripts_cache.json'):
-        with open("transcripts_cache.json", "w") as outfile:
-            json.dump({}, outfile)
-
-    with open("transcripts_cache.json") as transcripts_cache_json_file:
-        transcripts_cache = json.load(transcripts_cache_json_file)
-
-# load_transcripts_cache()
 
 def check_cache_has_transcript(project_name, case_id, question_code):
     if project_name in transcripts_cache and \
@@ -224,6 +212,10 @@ def get_transcription_results(trancript_engine):
     global transcript_tasks_db
     transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
 
+    #Load transcripts cache
+    global transcript_cache
+    transcript_cache = db_manager.load_database(TRANSCRIPTS_CACHE_FILE_NAME)
+
     if trancript_engine == 'azure_batch':
 
         #Find tasks in TRANSCRIPTION_IN_PROGRESS status
@@ -238,18 +230,15 @@ def get_transcription_results(trancript_engine):
                         result = azure_batch_transcribe.get_transcription_result(transcription_id=transcription_id)
 
                         if result:
-                            print('a')
-                            print(transcript_tasks_db[project][case_id][q_code]['status'])
                             transcript_tasks_db[project][case_id][q_code]['status'] = 'SUCCEDED'
-                            print(transcript_tasks_db[project][case_id][q_code]['status'])
-                            print('b')
-                            transcript_tasks_db[project][case_id][q_code]['transcript_url'] = result
+                            transcript_cache[project][case_id][q_code] = result
+
+                            db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+                            db_manager.save_db(transcript_cache, TRANSCRIPTS_CACHE_FILE_NAME)
                         else:
                             transcript_tasks_db[project][case_id][q_code]['status'] = 'FAILED'
-                        db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+                            db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
 
-
-        azure_batch_transcribe.get_transcription_result(transcription_id=transcription_id)
 
 
 def upload_transcript_tasks_audio_files(trancript_engine):

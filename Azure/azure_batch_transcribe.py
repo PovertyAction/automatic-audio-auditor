@@ -8,6 +8,7 @@
 
 import logging
 import sys
+import json
 import requests
 import time
 import swagger_client as cris_client
@@ -208,7 +209,21 @@ def get_transcription_result(transcription_id, waiting_time=5):
                 results_url = file_data.links.content_url
                 results = requests.get(results_url)
                 logging.info(f"Results for {audiofilename}:\n{results.content.decode('utf-8')}. results_url {results_url}")
-                return results_url
+
+                #Get result
+                result_json = json.loads(results.content.decode('utf-8'))
+
+
+                transcript_phrases = []
+                for recognized_phrase in result_json['recognizedPhrases']:
+                    phrase = recognized_phrase['nBest'][0]['lexical']
+                    transcript_phrases.append(phrase)
+
+                #Delete transcription in cloud
+                api.delete_transcription(transcription_id)
+
+                return transcript_phrases
+
         elif transcription.status == "Failed":
             print(f'Transcription failed for {transcription_id}')
             logging.info(f"Transcription failed: {transcription.properties.error.message}")
