@@ -169,7 +169,7 @@ def load_transcripts_cache():
     with open("transcripts_cache.json") as transcripts_cache_json_file:
         transcripts_cache = json.load(transcripts_cache_json_file)
 
-load_transcripts_cache()
+# load_transcripts_cache()
 
 def check_cache_has_transcript(project_name, case_id, question_code):
     if project_name in transcripts_cache and \
@@ -203,42 +203,54 @@ def launch_transcript_tasks(trancript_engine, language):
     transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
 
     if trancript_engine == 'azure_batch':
+        #Find tasks in data_uplodaded status
+        for project in transcript_tasks_db.keys():
+            for case_id in transcript_tasks_db[project].keys():
+                for q_code in transcript_tasks_db[project][case_id].keys():
 
-        azure_batch_transcribe.transcribe(locale=language, recordings_container_uri = 'https://backchecker.blob.core.windows.net/mycontainer')
+                    if transcript_tasks_db[project][case_id][q_code]['status']=='DATA_UPLOADED':
+
+                        transcription_id = azure_batch_transcribe.launch_transcription(locale=language, blob_name = transcript_tasks_db[project][case_id][q_code]['blob_name'])
+
+                        transcript_tasks_db[project][case_id][q_code]['status'] = 'TRANSCRIPTION_IN_PROGRESS'
+
+                        transcript_tasks_db[project][case_id][q_code]['transcription_id'] = transcription_id
+
+                        db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+def get_transcription_results(trancript_engine):
+
+    #Load transcripts tasks
+    global transcript_tasks_db
+    transcript_tasks_db = db_manager.load_database(TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+    if trancript_engine == 'azure_batch':
+
+        #Find tasks in TRANSCRIPTION_IN_PROGRESS status
+        for project in transcript_tasks_db.keys():
+            for case_id in transcript_tasks_db[project].keys():
+                for q_code in transcript_tasks_db[project][case_id].keys():
+
+                    if transcript_tasks_db[project][case_id][q_code]['status']=='TRANSCRIPTION_IN_PROGRESS':
+
+                        transcription_id = transcript_tasks_db[project][case_id][q_code]['transcription_id']
+
+                        result = azure_batch_transcribe.get_transcription_result(transcription_id=transcription_id)
+
+                        if result:
+                            print('a')
+                            print(transcript_tasks_db[project][case_id][q_code]['status'])
+                            transcript_tasks_db[project][case_id][q_code]['status'] = 'SUCCEDED'
+                            print(transcript_tasks_db[project][case_id][q_code]['status'])
+                            print('b')
+                            transcript_tasks_db[project][case_id][q_code]['transcript_url'] = result
+                        else:
+                            transcript_tasks_db[project][case_id][q_code]['status'] = 'FAILED'
+                        db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
 
 
+        azure_batch_transcribe.get_transcription_result(transcription_id=transcription_id)
 
-        # #Find tasks with data already uploaded
-        # for project in transcript_tasks_db.keys():
-        #     for case_id in transcript_tasks_db[project].keys():
-        #         for q_code in transcript_tasks_db[project][case_id].keys():
-        #
-        #             if transcript_tasks_db[project][case_id][q_code]['status']=='PENDING':
-        #
-        #                 task = transcript_tasks_db[project][case_id][q_code]
-        #
-        #                 #Create audio file for this task
-        #                 choped_wav_file_path = create_choped_wav(
-        #                     audio_url = task['audio_url'],
-        #                     offset = task['offset'],
-        #                     duration = task['duration'])
-        #
-        #                 #Upload files to container
-        #                 blob_name = f'{project}_{case_id}_{q_code}'
-        #
-        #                 upload_status = azure_file_management.upload_blob(
-        #                     file_path = choped_wav_file_path,
-        #                     blob_name = blob_name)
-        #
-        #                 #Remove audio chop
-        #                 os.remove(choped_wav_file_path)
-        #
-        #                 #Change task status
-        #                 transcript_tasks_db[project][case_id][q_code]['status'] = 'DATA_UPLOADED'
-        #                 db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
-        #
-        #                 if not upload_status:
-        #                     print(f'Error when uploading {project} {case_id} {q_code}')
 
 def upload_transcript_tasks_audio_files(trancript_engine):
 
@@ -275,6 +287,8 @@ def upload_transcript_tasks_audio_files(trancript_engine):
 
                         #Change task status
                         transcript_tasks_db[project][case_id][q_code]['status'] = 'DATA_UPLOADED'
+                        transcript_tasks_db[project][case_id][q_code]['blob_name'] = blob_name
+
                         db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
 
                         if not upload_status:

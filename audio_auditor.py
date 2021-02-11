@@ -735,6 +735,9 @@ class AudioAuditor:
         transcript_generator.launch_transcript_tasks(trancript_engine, language)
 
 
+    def receive_azure_batch_transcriptions(self, trancript_engine):
+        transcript_generator.get_transcription_results(trancript_engine)
+
     def analyze_all_survey_transcripts(self):
         '''
         Runs audits given transcripts are already created
@@ -763,8 +766,9 @@ if __name__=='__main__':
         '1':'CREATE_TRANSCRIPTION_TASKS',
         '2':'UPLOAD_TRANSCRIPT_AUDIO_FILES',
         '3':'LAUNCH_TRANSCRIPT_TASKS',
-        '4':'ANALYZE_TRANSCRIPTS',
-        '5':'CREATE_REPORTS',
+        '4':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
+        '5':'ANALYZE_TRANSCRIPTS',
+        '6':'CREATE_REPORTS',
         }
 
     project_name = projects_ids_to_names[sys.argv[1]]
@@ -783,7 +787,7 @@ if __name__=='__main__':
     elif task == 'LAUNCH_TRANSCRIPT_TASKS':
         audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch', language = audio_auditor.params['language'])
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
-        audio_auditor.receive_azure_batch_transcriptions()
+        audio_auditor.receive_azure_batch_transcriptions(trancript_engine = 'azure_batch')
     elif task == 'ANALYZE_TRANSCRIPTS':
         audio_auditor.analyze_all_survey_transcripts()
     elif task == 'CREATE_REPORTS':

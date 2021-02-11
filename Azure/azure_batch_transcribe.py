@@ -11,9 +11,8 @@ import sys
 import requests
 import time
 import swagger_client as cris_client
-
-from azure.storage.blob import generate_container_sas
-
+from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient, generate_container_sas, generate_blob_sas, ContainerSasPermissions
 
 logging.basicConfig(level=logging.DEBUG,
         format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p %Z", filename="batch_transcribe_log.txt")#stream=sys.stdout,
@@ -127,28 +126,42 @@ def delete_all_transcriptions(api):
         except cris_client.rest.ApiException as exc:
             logging.error(f"Could not delete transcription {transcription_id}: {exc}")
 
-def generate_sas_uri(recordings_container_uri):
+def generate_sas_uri(recordings_container_uri=None, blob_name=None):
 
-    from azure.storage.blob import BlobServiceClient
     blob_service_client = BlobServiceClient.from_connection_string(get_connection_string())
 
     container_client = blob_service_client.get_container_client("mycontainer")
 
-    sas_token = generate_container_sas(
-        container_client.account_name,
-        container_client.container_name,
-        account_key=container_client.credential.account_key,
-        policy_id='my-access-policy-id'
-    )
+    #If a blob_name was given, return sas of blob
+    if blob_name:
 
-    sas_uri =  recordings_container_uri + '?' + sas_token
-    return sas_uri
+        blob_sas_token = generate_blob_sas(
+            account_name=container_client.account_name,
+            container_name=container_client.container_name,
+            blob_name=blob_name,
+            account_key=container_client.credential.account_key,
+            permission=ContainerSasPermissions(read=True),
+            expiry=datetime.utcnow() + timedelta(hours=1)
+        )
 
-def transcribe(locale, recordings_blob_uri = None, recordings_container_uri = None):
+        blob_url_with_blob_sas_token = f"https://{container_client.account_name}.blob.core.windows.net/{container_client.container_name}/{blob_name}?{blob_sas_token}"
+        return blob_url_with_blob_sas_token
 
-# Provide the SAS uri of a container with audio files for transcribing all of them with a single request
+    #if recordings_container_uri was given, return sas of containers
+    if recordings_container_uri:
+        container_sas_token = generate_container_sas(
+            container_client.account_name,
+            container_client.container_name,
+            account_key=container_client.credential.account_key,
+            policy_id='my-access-policy-id'
+        )
 
-    logging.info("Starting transcription client...")
+        sas_uri =  recordings_container_uri + '?' + sas_token
+        return sas_uri
+
+
+
+def get_instance_transcription_api():
 
     # configure API key authorization: subscription_key
     configuration = cris_client.Configuration()
@@ -161,6 +174,53 @@ def transcribe(locale, recordings_blob_uri = None, recordings_container_uri = No
     # create an instance of the transcription api class
     api = cris_client.DefaultApi(api_client=client)
 
+    return api
+
+
+def get_transcription_result(transcription_id, waiting_time=5):
+    logging.info(f"Checking transcription status for {transcription_id}.")
+
+    completed = False
+
+    api = get_instance_transcription_api()
+
+    while not completed:
+        # wait for 5 seconds before refreshing the transcription status
+        time.sleep(waiting_time)
+
+        transcription = api.get_transcription(transcription_id)
+        logging.info(f"Transcriptions status: {transcription.status}")
+
+        print(f"Transcriptions status for {transcription_id}: {transcription.status}")
+        if transcription.status in ("Failed", "Succeeded"):
+            completed = True
+
+        if transcription.status == "Succeeded":
+            print(f'Transcription succeded for {transcription_id}')
+            pag_files = api.get_transcription_files(transcription_id)
+
+            #SHouldnt be more than one file right?
+            for file_data in _paginate(api, pag_files):
+                if file_data.kind != "Transcription":
+                    continue
+
+                audiofilename = file_data.name
+                results_url = file_data.links.content_url
+                results = requests.get(results_url)
+                logging.info(f"Results for {audiofilename}:\n{results.content.decode('utf-8')}. results_url {results_url}")
+                return results_url
+        elif transcription.status == "Failed":
+            print(f'Transcription failed for {transcription_id}')
+            logging.info(f"Transcription failed: {transcription.properties.error.message}")
+            return None
+
+
+def launch_transcription(locale, blob_name = None, recordings_container_uri = None):
+
+    logging.info("Starting transcription client...")
+
+    api = get_instance_transcription_api()
+
     # Specify transcription properties by passing a dict to the properties parameter. See
     # https://docs.microsoft.com/azure/cognitive-services/speech-service/batch-transcription#configuration-properties
     # for supported parameters.
@@ -169,18 +229,17 @@ def transcribe(locale, recordings_blob_uri = None, recordings_container_uri = No
         # "profanityFilterMode": "Masked",
         # "wordLevelTimestampsEnabled": True,
         # "diarizationEnabled": True#,
-#        "destinationContainerUrl": "https://backchecker.blob.core.windows.net/transcriptionresults"
+        # "destinationContainerUrl": "https://backchecker.blob.core.windows.net/transcriptionresults"
         # "timeToLive": "PT1H"
     }
 
-    # Use base models for transcription. Comment this block if you are using a custom model.
-    if recordings_blob_uri:
+    if blob_name:
+        recordings_blob_uri = generate_sas_uri(blob_name=blob_name)
         transcription_definition = transcribe_from_single_blob(recordings_blob_uri, properties, locale)
 
     # Uncomment this block to use custom models for transcription.
     # transcription_definition = transcribe_with_custom_model(api, RECORDINGS_BLOB_URI, properties)
 
-    # Uncomment this block to transcribe all files from a container.
     elif recordings_container_uri:
         recordings_container_sas_uri = generate_sas_uri(recordings_container_uri)
         transcription_definition = transcribe_from_container(recordings_container_sas_uri, properties, locale)
@@ -193,35 +252,9 @@ def transcribe(locale, recordings_blob_uri = None, recordings_container_uri = No
     # Log information about the created transcription. If you should ask for support, please
     # include this information.
     logging.info(f"Created new transcription with id '{transcription_id}' in region {SERVICE_REGION}")
+    print(f"Created new transcription with id '{transcription_id}' in region {SERVICE_REGION}")
 
-    logging.info("Checking status.")
-
-    completed = False
-
-    while not completed:
-        # wait for 5 seconds before refreshing the transcription status
-        time.sleep(5)
-
-        transcription = api.get_transcription(transcription_id)
-        logging.info(f"Transcriptions status: {transcription.status}")
-
-        if transcription.status in ("Failed", "Succeeded"):
-            completed = True
-
-        if transcription.status == "Succeeded":
-            print('Transcription succeded')
-            pag_files = api.get_transcription_files(transcription_id)
-            for file_data in _paginate(api, pag_files):
-                if file_data.kind != "Transcription":
-                    continue
-
-                audiofilename = file_data.name
-                results_url = file_data.links.content_url
-                results = requests.get(results_url)
-                logging.info(f"Results for {audiofilename}:\n{results.content.decode('utf-8')}")
-        elif transcription.status == "Failed":
-            print('Transcription failed')
-            logging.info(f"Transcription failed: {transcription.properties.error.message}")
+    return transcription_id
 
 
 if __name__ == "__main__":
