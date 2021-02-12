@@ -734,14 +734,17 @@ class AudioAuditor:
     def launch_transcript_tasks(self, trancript_engine, language):
         transcript_generator.launch_transcript_tasks(trancript_engine, language)
 
-
     def receive_azure_batch_transcriptions(self, trancript_engine):
         transcript_generator.get_transcription_results(trancript_engine)
+
+    def run_live_transcriptions(self, language):
+        transcript_generator.run_live_transcriptions(language)
 
     def analyze_all_survey_transcripts(self):
         '''
         Runs audits given transcripts are already created
         '''
+
         #Load transcripts cache
         global transcripts_cache
         transcripts_cache = db_manager.load_database(TRANSCRIPTS_CACHE_FILE_NAME)
@@ -767,8 +770,9 @@ if __name__=='__main__':
         '2':'UPLOAD_TRANSCRIPT_AUDIO_FILES',
         '3':'LAUNCH_TRANSCRIPT_TASKS',
         '4':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
-        '5':'ANALYZE_TRANSCRIPTS',
-        '6':'CREATE_REPORTS',
+        '5':'LIVE_TRANSCRIPTIONS',
+        '6':'ANALYZE_TRANSCRIPTS',
+        '7':'CREATE_REPORTS'
         }
 
     project_name = projects_ids_to_names[sys.argv[1]]
@@ -788,6 +792,8 @@ if __name__=='__main__':
         audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch', language = audio_auditor.params['language'])
     elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
         audio_auditor.receive_azure_batch_transcriptions(trancript_engine = 'azure_batch')
+    elif task == 'LIVE_TRANSCRIPTIONS':
+        audio_auditor.run_live_transcriptions(language = audio_auditor.params['language'])
     elif task == 'ANALYZE_TRANSCRIPTS':
         audio_auditor.analyze_all_survey_transcripts()
     elif task == 'CREATE_REPORTS':
