@@ -20,3 +20,14 @@ def upload_blob(file_path, blob_name):
         blob.upload_blob(data)
 
     return True
+
+
+def delete_blob(blob_name):
+
+    print(f'deleting {blob_name}')
+
+    blob = BlobClient.from_connection_string(conn_str=get_connection_string(), container_name=CONTAINER_NAME, blob_name=blob_name)
+
+    blob.delete_blob()
+
+    return True

@@ -185,6 +185,9 @@ def get_transcription_results(trancript_engine):
 
                             db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
                             db_manager.save_db(transcript_cache, TRANSCRIPTS_CACHE_FILE_NAME)
+
+                            #Now we can delete the blob in azure
+                            azure_file_management.delete_blob(blob_name=transcript_tasks_db[project][case_id][q_code]['blob_name'])
                         else:
                             transcript_tasks_db[project][case_id][q_code]['status'] = 'FAILED'
                             db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
