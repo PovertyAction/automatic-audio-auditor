@@ -1,0 +1,6 @@
+deepspeech==0.8.0
+webrtcvad
+numpy
+pandas
+pydub
+azure-cognitiveservices-speech
