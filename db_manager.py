@@ -4,18 +4,20 @@ import json
 def load_database(DB_FILE_NAME):
 
     #If file does not exist, create it
-    if not os.path.exists(DB_FILE_NAME):
-        with open(DB_FILE_NAME, "w") as outfile:
-            # json.dump({}, outfile)
-            outfile.write('{}')
-            outfile.close()
+    # if not os.path.exists(DB_FILE_NAME):
+    #     with open(DB_FILE_NAME, "w") as outfile:
+    #         # json.dump({}, outfile)
+    #         outfile.write('{}')
+    #         outfile.close()
+
+    print(f'loading {os.path.abspath(DB_FILE_NAME)}')
 
     with open(DB_FILE_NAME) as db_file:
         db = json.load(db_file)
         db_file.close()
     return db
 
-def get_element_from_database(database, project_name, case_id, q_code, repeate_group_q, repeated_q_number):
+def get_element_from_database(database, project_name, case_id, q_code, repeate_group_q = False, repeated_q_number = None):
 
     #Case its a repeated question
     if repeate_group_q:
@@ -36,7 +38,7 @@ def save_db(database, database_file_name):
     #reference: https://stackoverflow.com/questions/2333872/how-to-make-file-creation-an-atomic-operation
 
     #Create temp_file
-    tmp_file = open(os.path.join('Databases', 'tmp_file.json'), 'w')
+    tmp_file = open('tmp_file.json', 'w')
     #Copy data to temp_file
     json.dump(database, tmp_file)
     #Be sure to finish writing all data
@@ -45,7 +47,7 @@ def save_db(database, database_file_name):
     #Close file
     tmp_file.close()
     #Rename file
-    os.rename(os.path.join('Databases', 'tmp_file.json'), database_file_name)
+    os.rename('tmp_file.json', database_file_name)
 
 def save_to_db(
     database,
@@ -53,9 +55,9 @@ def save_to_db(
     project_name,
     case_id,
     q_code,
-    repeate_group_q,
-    repeated_q_number,
-    element_to_save):
+    element_to_save,
+    repeate_group_q=False,
+    repeated_q_number=None):
 
     #Write to dictionary
     #Creat sub dictionaries if they dont exist

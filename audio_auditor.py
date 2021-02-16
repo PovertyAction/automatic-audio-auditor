@@ -320,7 +320,7 @@ class AnswerAnalyzer:
 
 
 
-def compute_offset_and_duration(ta_row, first_q_offset=0, previous_ta_row=None, next_ta_row=None):
+def compute_offset_and_duration(ta_row, first_q_offset=0, next_ta_row=None):
     q_first_appeared = ta_row['First appeared (seconds into survey)']-first_q_offset
 
     #Sometimes duration is longer than it should (given back and forths), so we will choose duration = difference between next q starting point and current one, if duration reported is too long.
@@ -502,6 +502,7 @@ class QuestionAnalyzer:
             first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset,
             previous_ta_row= self.previous_ta_row,
             next_ta_row = self.next_ta_row)
+    
 
         task_info = {
             'audio_url':self.survey_entrie_analyzer.audio_path,
@@ -640,9 +641,7 @@ class SurveyEntrieAnalyzer:
                     repeated_q_number = q_analyzer.repeated_q_number,
                     element_to_save = q_analysis_result)
 
-
-
-    def create_transcript_tasks(self):
+    def create_questions_transcript_tasks(self):
 
         if not self.audio_path_exists():
             return False
@@ -725,7 +724,7 @@ class AudioAuditor:
             print(f"SURVEY {index}/{self.n_rows_to_process}. Caseid {survey_row['caseid']}")
 
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
-            survey_response_analyzer.create_transcript_tasks()
+            survey_response_analyzer.create_questions_transcript_tasks()
 
     def upload_transcript_tasks_audio_files(self, trancript_engine):
         transcript_generator.upload_transcript_tasks_audio_files(trancript_engine)

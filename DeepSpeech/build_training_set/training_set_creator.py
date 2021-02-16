@@ -27,8 +27,12 @@ import wavSplit
 
 #Import audio auditor modules
 sys.path.append(os.path.abspath('../..'))
-import transcript_generator
-import transcripts_cache_manager
+import db_manager
+from file_names import *
+
+#Import Azure module to generate transcriptions
+# sys.path.append(os.path.abspath('../../Azure'))
+from Azure import azure_transcribe
 
 #Parameters
 segment_generation_aggressive = 3
@@ -100,7 +104,7 @@ def represents_int(s):
     except ValueError:
         return False
 
-def create_training_set(project_name, transcripts_cache_file, media_folder, testing=False):
+def create_training_set(project_name, media_folder, testing=False):
 
     all_audios_paths = get_audio_paths(media_folder)
 
@@ -110,15 +114,17 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
         os.mkdir(outputs_directory)
 
     #Load transcripts cache
-    transcripts_cache = transcripts_cache_manager.load_cache(transcripts_cache_file)
+
+
+
+    transcripts_cache = db_manager.load_database(DS_TRAINING_TRANSCRIPTS_DB_FILE_NAME)
 
     df_rows = []
     for audio_index, audio_path in enumerate(all_audios_paths):
 
         print(f'Working on audio {audio_path.split("media")[1]}')
-        if testing and audio_index>20:
+        if testing and audio_index>30:
             break
-
 
         #Create directory for this audio outputs
         audio_file_name = audio_path.split('/')[-1].split('.')[0]
@@ -143,11 +149,28 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
 
             chunk_size = os.path.getsize(chunk_path)
 
-            chunk_transcript, new_transcript = transcript_generator.generate_transcript(project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), audio_url=chunk_path, language='es-CO', first_q_offset=0, look_for_transcript_in_cache=True, transcripts_cache=transcripts_cache, show_debugging_prints=False, show_azure_debugging_prints=False, return_list_phrases=False)
+            #First lets check if transcript is already existing in db
+            chunk_transcript = db_manager.get_element_from_database(
+                database = transcripts_cache,
+                project_name = project_name,
+                case_id = audio_file_name,
+                q_code = str(chunk_index))
 
-            if new_transcript:
-                transcripts_cache_manager.add_transcript_to_cache(transcripts_cache=transcripts_cache, project_name=project_name, case_id=audio_file_name, q_code=str(chunk_index), transcript=chunk_transcript)
-                transcripts_cache_manager.save_cache(transcripts_cache, transcripts_cache_file)
+            # if chunk_transcript:
+            #     print(f'Found transcript for {project_name} {audio_file_name} {chunk_index}')
+            #If we didnt find transcript in db, generate it and save it
+            if chunk_transcript is None:
+                print(f'Generating transcript for {project_name} {audio_file_name} {chunk_index}')
+                chunk_transcript = azure_transcribe.generate_transcript(chunk_path, language='es-CO', return_list=False)
+                print(chunk_transcript)
+
+                db_manager.save_to_db(
+                    database = transcripts_cache,
+                    database_file_name = DS_TRAINING_TRANSCRIPTS_DB_FILE_NAME,
+                    project_name = project_name,
+                    case_id = audio_file_name,
+                    q_code = str(chunk_index),
+                    element_to_save = chunk_transcript)
 
             #We do not want to train our model with empty transcripts
             if chunk_transcript != '':
@@ -159,8 +182,10 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
                 #We are currently not being able to capture numbers as words (instead of digits) when generating transcripts. Until then, we wont consider transcripts that are only numbers
                 if not represents_int(chunk_transcript):
                     df_rows.append([chunk_path, chunk_size, chunk_transcript])
-                else:
-                    print(f'Not considering {chunk_transcript}')
+            #     else:
+            #         print(f'Not considering {chunk_transcript} cause its pure number')
+            # else:
+            #     print(f'Not considering {chunk_transcript} cause its empty')
 
         print('Transcrips for chunks ready\n')
 
@@ -194,5 +219,4 @@ def create_training_set(project_name, transcripts_cache_file, media_folder, test
 if __name__ == '__main__':
     project_name = 'RECOVER-RD3-COL'
     media_folder = '/mnt/x/Box Sync/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media'
-    transcripts_cache_file = 'deepspeech_training_cache.json'
-    create_training_set(project_name, transcripts_cache_file, media_folder, testing=True)
+    create_training_set(project_name, media_folder, testing=True)

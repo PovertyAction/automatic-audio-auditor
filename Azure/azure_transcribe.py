@@ -35,7 +35,7 @@ def print_if_debugging(text, show_debugging_prints):
 #Global to indicate when transcription is done
 done = None
 
-def generate_transcript(file_path, language, show_debugging_prints=False):
+def generate_transcript(file_path, language, return_list = True, show_debugging_prints=False):
     global done
     done = False
 
@@ -81,7 +81,11 @@ def generate_transcript(file_path, language, show_debugging_prints=False):
 
     full_transcript = recognized_text
     print_if_debugging(full_transcript, show_debugging_prints)
-    return full_transcript
+
+    if return_list:
+        return full_transcript
+    else:
+        return " ".join(full_transcript)
 
 if __name__ == '__main__':
     get_speech_config_properties()
