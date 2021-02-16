@@ -2,7 +2,7 @@
 import azure.cognitiveservices.speech as speechsdk
 import time
 from .azure_keys import get_speech_key, get_service_region
-
+import json
 #Parameters
 speech_key = get_speech_key()
 service_region = get_service_region()
@@ -41,7 +41,9 @@ def generate_transcript(file_path, language, return_list = True, show_debugging_
 
     #Set SpeechConfig, AudioConfig and SpeedRecognizer
     speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
+
     speech_config.speech_recognition_language=language
+    speech_config.output_format = speechsdk.OutputFormat.Detailed
 
     audio_config = speechsdk.audio.AudioConfig(filename=file_path)
 
@@ -59,7 +61,8 @@ def generate_transcript(file_path, language, return_list = True, show_debugging_
     def save_recognized_text(evt):
         print_if_debugging('RECOGNIZED: {}'.format(evt), show_debugging_prints)
         if(evt.result.text!=""):
-            recognized_text.append(evt.result.text)
+            lexical_text = json.loads(evt.result.json)['NBest'][0]['Lexical']
+            recognized_text.append(lexical_text)
 
     #We connect callbacks to eventrs from the speech_recognizer
     speech_recognizer.recognized.connect(lambda evt: save_recognized_text(evt))
@@ -88,15 +91,5 @@ def generate_transcript(file_path, language, return_list = True, show_debugging_
         return " ".join(full_transcript)
 
 if __name__ == '__main__':
+
     get_speech_config_properties()
-    # print(generate_transcript('transcript.wav'))
-
-
-
-#     wordLevelTimestampsEnabled
-#
-# Optional, false by default. Specifies if word level timestamps should be added to the output.
-#
-# diarizationEnabled
-#
-# Optional, false by default. Specifies that diarization analysis should be carried out on the input, which is expected to be mono channel containing two voices. Note: Requires wordLevelTimestampsEnabled to be set to true.
