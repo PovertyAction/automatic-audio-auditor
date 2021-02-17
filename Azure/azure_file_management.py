@@ -8,13 +8,11 @@ from azure.storage.blob import BlobClient
 # service = BlobServiceClient(conn_str=get_connection_string())
 
 
-CONTAINER_NAME = 'mycontainer'
-
-def upload_blob(file_path, blob_name):
+def upload_blob(file_path, container_name, blob_name):
 
     print(f'uploading {file_path}')
 
-    blob = BlobClient.from_connection_string(conn_str=get_connection_string(), container_name=CONTAINER_NAME, blob_name=blob_name)
+    blob = BlobClient.from_connection_string(conn_str=get_connection_string(), container_name=container_name, blob_name=blob_name)
 
     with open(file_path, "rb") as data:
         blob.upload_blob(data)
@@ -22,11 +20,11 @@ def upload_blob(file_path, blob_name):
     return True
 
 
-def delete_blob(blob_name):
+def delete_blob(container_name, blob_name):
 
     print(f'deleting {blob_name}')
 
-    blob = BlobClient.from_connection_string(conn_str=get_connection_string(), container_name=CONTAINER_NAME, blob_name=blob_name)
+    blob = BlobClient.from_connection_string(conn_str=get_connection_string(), container_name=container_name, blob_name=blob_name)
 
     blob.delete_blob()
 

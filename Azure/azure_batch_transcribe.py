@@ -127,38 +127,42 @@ def delete_all_transcriptions(api):
         except cris_client.rest.ApiException as exc:
             logging.error(f"Could not delete transcription {transcription_id}: {exc}")
 
-def generate_sas_uri(recordings_container_uri=None, blob_name=None):
+def get_container_client(container_name):
 
     blob_service_client = BlobServiceClient.from_connection_string(get_connection_string())
 
-    container_client = blob_service_client.get_container_client("mycontainer")
+    container_client = blob_service_client.get_container_client(container_name)
 
-    #If a blob_name was given, return sas of blob
-    if blob_name:
+    return container_client
 
-        blob_sas_token = generate_blob_sas(
-            account_name=container_client.account_name,
-            container_name=container_client.container_name,
-            blob_name=blob_name,
-            account_key=container_client.credential.account_key,
-            permission=ContainerSasPermissions(read=True),
-            expiry=datetime.utcnow() + timedelta(hours=1)
-        )
+def generate_blob_sas_uri(container_name, blob_name):
 
-        blob_url_with_blob_sas_token = f"https://{container_client.account_name}.blob.core.windows.net/{container_client.container_name}/{blob_name}?{blob_sas_token}"
-        return blob_url_with_blob_sas_token
+    container_client = get_container_client(container_name)
 
-    #if recordings_container_uri was given, return sas of containers
-    if recordings_container_uri:
-        container_sas_token = generate_container_sas(
-            container_client.account_name,
-            container_client.container_name,
-            account_key=container_client.credential.account_key,
-            policy_id='my-access-policy-id'
-        )
+    blob_sas_token = generate_blob_sas(
+        account_name=container_client.account_name,
+        container_name=container_client.container_name,
+        blob_name=blob_name,
+        account_key=container_client.credential.account_key,
+        permission=ContainerSasPermissions(read=True),
+        expiry=datetime.utcnow() + timedelta(hours=1)
+    )
 
-        sas_uri =  recordings_container_uri + '?' + sas_token
-        return sas_uri
+    blob_url_with_blob_sas_token = f"https://{container_client.account_name}.blob.core.windows.net/{container_client.container_name}/{blob_name}?{blob_sas_token}"
+    return blob_url_with_blob_sas_token
+
+def generate_container_sas_uri(container_name, policy_id):
+
+    container_client = get_container_client(container_name)
+
+    container_sas_token = generate_container_sas(
+        container_client.account_name,
+        container_client.container_name,
+        account_key=container_client.credential.account_key,
+        policy_id= policy_id
+    )
+    container_url_with_container_sas_token = f"https://{container_client.account_name}.blob.core.windows.net/{container_client.container_name}?{container_sas_token}"
+    return container_url_with_container_sas_token
 
 
 
@@ -230,7 +234,7 @@ def get_transcription_result(transcription_id, waiting_time=5):
             return None
 
 
-def launch_transcription(locale, blob_name = None, recordings_container_uri = None):
+def launch_transcription(locale, container_name, blob_name = None, transcribe_whole_container=False):
 
     logging.info("Starting transcription client...")
 
@@ -249,14 +253,14 @@ def launch_transcription(locale, blob_name = None, recordings_container_uri = No
     }
 
     if blob_name:
-        recordings_blob_uri = generate_sas_uri(blob_name=blob_name)
-        transcription_definition = transcribe_from_single_blob(recordings_blob_uri, properties, locale)
+        recordings_blob_sas_uri = generate_blob_sas_uri(container_name = container_name, blob_name=blob_name)
+        transcription_definition = transcribe_from_single_blob(recordings_blob_sas_uri, properties, locale)
 
     # Uncomment this block to use custom models for transcription.
     # transcription_definition = transcribe_with_custom_model(api, RECORDINGS_BLOB_URI, properties)
 
-    elif recordings_container_uri:
-        recordings_container_sas_uri = generate_sas_uri(recordings_container_uri)
+    elif transcribe_whole_container:
+        recordings_container_sas_uri = generate_container_sas_uri(container_name=container_name)
         transcription_definition = transcribe_from_container(recordings_container_sas_uri, properties, locale)
 
     created_transcription, status, headers = api.create_transcription_with_http_info(transcription=transcription_definition)

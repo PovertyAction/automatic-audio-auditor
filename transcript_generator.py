@@ -102,20 +102,24 @@ def run_live_transcriptions(language):
                   #Generate transcript
                   transcription = azure_transcribe.generate_transcript(choped_wav_file_path, language)
                   print(f'Transcript for {project} {case_id} {q_code} ready')
+                  print(transcription)
 
-                  #Replace abbreviations for full words
-                  transcription_no_abb = [replace_abbreviations(phrase) for phrase in transcription]
-                  print(transcription_no_abb)
-                  #Remove audio chop
-                  os.remove(choped_wav_file_path)
 
                   #Save transcript
-                  transcript_cache[project][case_id][q_code] = transcription_no_abb
-                  db_manager.save_db(transcript_cache, TRANSCRIPTS_CACHE_FILE_NAME)
+                  db_manager.save_to_db(
+                      database=transcript_cache,
+                      database_file_name=TRANSCRIPTS_CACHE_FILE_NAME,
+                      project_name=project,
+                      case_id=case_id,
+                      q_code=q_code,
+                      element_to_save=transcription)
 
                   #Change task status
                   transcript_tasks_db[project][case_id][q_code]['status'] = 'SUCCEDED'
                   db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
+
+                  #Remove audio chop
+                  os.remove(choped_wav_file_path)
 
 
 def create_choped_wav(audio_url, offset, duration):
@@ -148,7 +152,7 @@ def launch_transcript_tasks(trancript_engine, language):
 
                     if transcript_tasks_db[project][case_id][q_code]['status']=='DATA_UPLOADED':
 
-                        transcription_id = azure_batch_transcribe.launch_transcription(locale=language, blob_name = transcript_tasks_db[project][case_id][q_code]['blob_name'])
+                        transcription_id = azure_batch_transcribe.launch_transcription(locale=language, container_name = 'mycontainer', blob_name = transcript_tasks_db[project][case_id][q_code]['blob_name'])
 
                         transcript_tasks_db[project][case_id][q_code]['status'] = 'TRANSCRIPTION_IN_PROGRESS'
 
@@ -187,7 +191,7 @@ def get_transcription_results(trancript_engine):
                             db_manager.save_db(transcript_cache, TRANSCRIPTS_CACHE_FILE_NAME)
 
                             #Now we can delete the blob in azure
-                            azure_file_management.delete_blob(blob_name=transcript_tasks_db[project][case_id][q_code]['blob_name'])
+                            azure_file_management.delete_blob(container_name = 'mycontainer', blob_name=transcript_tasks_db[project][case_id][q_code]['blob_name'])
                         else:
                             transcript_tasks_db[project][case_id][q_code]['status'] = 'FAILED'
                             db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
@@ -222,6 +226,7 @@ def upload_transcript_tasks_audio_files(trancript_engine):
 
                         upload_status = azure_file_management.upload_blob(
                             file_path = choped_wav_file_path,
+                            container_name = 'mycontainer',
                             blob_name = blob_name)
 
                         #Remove audio chop
