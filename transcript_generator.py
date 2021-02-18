@@ -73,6 +73,28 @@ def previous_transcript_to_none():
     global previous_transcription
     previous_transcription = None
 
+def tasks_are_equal(task1, task2):
+
+    #Check if any of the keys is different
+    for key in ['audio_url', 'offset', 'duration']:
+        if task1[key] != task2[key]:
+            return False
+    return True
+
+def get_equivalent_succeded_question(transcript_tasks_db, project, case_id, q_code, task):
+    '''
+    Check if transcript_tasks_db has a task for a question with same timeframe as q_code
+    '''
+    ##Check we are not speaking about the same question, that questions have same timeframe and that other question is succeded
+    for other_question in transcript_tasks_db[project][case_id]:
+        if other_question != q_code and \
+            tasks_are_equal(task, transcript_tasks_db[project][case_id][other_question]) and \
+            transcript_tasks_db[project][case_id][other_question]['status'] == 'SUCCEDED':
+
+            return other_question
+    return None
+
+
 def run_live_transcriptions(language):
 
     #Load transcripts tasks
@@ -92,18 +114,35 @@ def run_live_transcriptions(language):
 
                   task = transcript_tasks_db[project][case_id][q_code]
 
-                  #Create audio file for this task
-                  choped_wav_file_path = create_choped_wav(
-                      audio_url = task['audio_url'],
-                      offset = task['offset'],
-                      duration = task['duration'])
 
+                  transcript = None
 
-                  #Generate transcript
-                  transcription = azure_transcribe.generate_transcript(choped_wav_file_path, language)
-                  print(f'Transcript for {project} {case_id} {q_code} ready')
-                  print(transcription)
+                  #We know that some tasks are repetitive, in the sense that some questions have the same timeframe than others. This happens for grouped questions
+                  #If that is the case, rather than generating the transcript twice, we will copy the transcript from the equivalent question
+                  equivalent_succeded_q = get_equivalent_succeded_question(transcript_tasks_db, project, case_id, q_code, task)
+                  if equivalent_succeded_q:
+                      equivalent_transcript = db_manager.get_element_from_database(transcript_cache, project, case_id, equivalent_succeded_q)
+                      if equivalent_transcript:
+                          transcript = equivalent_transcript
+                          print(f'For {project} {case_id} {q_code}, we will use same transcript as {equivalent_succeded_q}')
+                          # print(transcript)
+                      else:
+                          raise ValueError(f"Succeding task does not have transcript {project} {case_id} {equivalent_succeded_q}")
 
+                  #If we did not get transcript from an equivalent question, calculate it
+                  if transcript is None:
+                      #Create audio file for this task
+                      choped_wav_file_path = create_choped_wav(
+                          audio_url = task['audio_url'],
+                          offset = task['offset'],
+                          duration = task['duration'])
+
+                      #Generate transcript
+                      transcript = azure_transcribe.generate_transcript(choped_wav_file_path, language, show_debugging_prints=False)
+                      print(f'Transcript for {project} {case_id} {q_code} ready')
+
+                      #Remove audio chop
+                      os.remove(choped_wav_file_path)
 
                   #Save transcript
                   db_manager.save_to_db(
@@ -112,14 +151,13 @@ def run_live_transcriptions(language):
                       project_name=project,
                       case_id=case_id,
                       q_code=q_code,
-                      element_to_save=transcription)
+                      element_to_save=transcript)
 
                   #Change task status
                   transcript_tasks_db[project][case_id][q_code]['status'] = 'SUCCEDED'
                   db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
 
-                  #Remove audio chop
-                  os.remove(choped_wav_file_path)
+
 
 
 def create_choped_wav(audio_url, offset, duration):
