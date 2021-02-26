@@ -7,6 +7,7 @@ import sys
 from name_reports_columns import *
 import aa_params
 import db_manager
+from file_names import *
 
 def get_concatenated_cases_reports(cases_reports_path, project_params):
 
@@ -61,9 +62,9 @@ def generate_surveyor_level_report(path_to_project_reports, cases_reports_df):
         #Cases
         cases_ids = enum_cases_df[col_case_id].unique()
 
-        def get_questions_and_counts(enum_cases_df, col_criteria):
+        def get_questions_and_counts(enum_cases_df, col_criteria, true_false_criteria):
         #Compute how many times each question matches criteria (missing, read inappropiately, or presents incongruency)
-            all_q_codes_that_match_criteria = enum_cases_df[enum_cases_df[col_criteria]==True][col_q_code].tolist()
+            all_q_codes_that_match_criteria = enum_cases_df[enum_cases_df[col_criteria]==true_false_criteria][col_q_code].tolist()
             q_and_counts = {}
             for q_code in set(all_q_codes_that_match_criteria):
                 q_and_counts[q_code] = all_q_codes_that_match_criteria.count(q_code)
@@ -77,15 +78,15 @@ def generate_surveyor_level_report(path_to_project_reports, cases_reports_df):
 
         #N questions missing
         n_questions_missing = len(enum_cases_df[enum_cases_df[col_q_missing]==True])
-        questions_missing = get_questions_and_counts(enum_cases_df, col_q_missing)
+        questions_missing = get_questions_and_counts(enum_cases_df, col_q_missing, true_false_criteria=True)
 
         #Questions read inappropiately
         n_questions_read_inappropiately = len(enum_cases_df[enum_cases_df[col_q_read_inappropiately]==True])
-        questions_read_inappropiately = get_questions_and_counts(enum_cases_df, col_q_read_inappropiately)
+        questions_read_inappropiately = get_questions_and_counts(enum_cases_df, col_q_read_inappropiately, true_false_criteria=True)
 
         #Number of questions with wrong answer in surveycto
         n_questions_answer_error = len(enum_cases_df[enum_cases_df[col_answer_congruity]==False])
-        questions_answer_error = get_questions_and_counts(enum_cases_df, col_answer_congruity)
+        questions_answer_error = get_questions_and_counts(enum_cases_df, col_answer_congruity, true_false_criteria=False)
 
         enum_report_row = {
             'enum_id':enum_id,
@@ -168,7 +169,7 @@ def generate_case_level_reports(path_to_project_reports, project_name):
         os.makedirs(path_to_cases_reports)
 
     project_question_analysis_db = \
-        db_manager.load_database('question_analysis_db.json')[project_name]
+        db_manager.load_database(QUESTION_ANALYSIS_DB_FILE_NAME)[project_name]
 
     #For each case, create a report
     for case_id in project_question_analysis_db.keys():
@@ -179,7 +180,6 @@ def generate_case_level_reports(path_to_project_reports, project_name):
         for q_code in project_question_analysis_db[case_id].keys():
             q_results.append(project_question_analysis_db[case_id][q_code])
 
-        print(q_results)
 
         #Save results in a .xlsx
         if len(q_results)>0:
@@ -224,12 +224,16 @@ def generate_reports(project_params):
     if not os.path.exists(path_to_project_reports):
         os.makedirs(path_to_project_reports)
 
+    print('Starting generate_case_level_reports')
     generate_case_level_reports(path_to_project_reports, project_params['project_name'])
 
+    print('Starting generate_and_save_all_cases_report')
     cases_reports_df = generate_and_save_all_cases_report(path_to_project_reports, project_params)
 
+    print('Starting generate_surveyor_level_report')
     generate_surveyor_level_report(path_to_project_reports, cases_reports_df)
 
+    print('Starting generate_question_level_report')
     generate_question_level_report(path_to_project_reports, cases_reports_df)
 
 if __name__ == '__main__':
