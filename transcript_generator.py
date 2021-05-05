@@ -2,6 +2,7 @@ import os
 from pydub import AudioSegment
 import numpy as np
 import json
+import time
 import db_manager
 from file_names import *
 
@@ -106,12 +107,24 @@ def run_live_transcriptions(language):
     transcript_cache = db_manager.load_database(TRANSCRIPTS_CACHE_FILE_NAME)
 
     #Find tasks in pending status
+    total_n_pending_tasks=0
     for project in transcript_tasks_db.keys():
       for case_id in transcript_tasks_db[project].keys():
           for q_code in transcript_tasks_db[project][case_id].keys():
 
               if transcript_tasks_db[project][case_id][q_code]['status']=='PENDING':
+                  total_n_pending_tasks+=1
 
+    #Find tasks in pending
+    task_i=1
+    for project in transcript_tasks_db.keys():
+      for case_id in transcript_tasks_db[project].keys():
+          for q_code in transcript_tasks_db[project][case_id].keys():
+
+              if transcript_tasks_db[project][case_id][q_code]['status']=='PENDING':
+                  print(f'Working task {task_i}/{total_n_pending_tasks}')
+
+                  start_time = time.time()
                   task = transcript_tasks_db[project][case_id][q_code]
 
 
@@ -140,7 +153,7 @@ def run_live_transcriptions(language):
                       #Generate transcript
                       transcript = azure_transcribe.generate_transcript(choped_wav_file_path, language, show_debugging_prints=False)
                       print(f'Transcript for {project} {case_id} {q_code} ready')
-
+                      print(transcript)
                       #Remove audio chop
                       os.remove(choped_wav_file_path)
 
@@ -157,8 +170,11 @@ def run_live_transcriptions(language):
                   transcript_tasks_db[project][case_id][q_code]['status'] = 'SUCCEDED'
                   db_manager.save_db(transcript_tasks_db, TRANSCRIPT_TASKS_DB_FILE_NAME)
 
-
-
+                  task_i+=1
+                  end_time = time.time()
+                  print(f'Task took {end_time-start_time} seconds')
+                  print(f"Audio file duration {task['duration']}")
+                  print(f"{task['duration']/(end_time-start_time)} audio data processes per sec")
 
 def create_choped_wav(audio_url, offset, duration):
 
