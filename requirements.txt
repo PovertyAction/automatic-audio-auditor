@@ -1,0 +1,11 @@
+azure-cognitiveservices-speech
+setuptools_rust
+azure-storage-blob
+pandas
+pydub
+jiwer
+nltk
+num2words
+text2num
+xlrd==1.2.0
+xlsxwriter
