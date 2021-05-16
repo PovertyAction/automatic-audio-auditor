@@ -248,7 +248,7 @@ def launch_transcription(locale, container_name, blob_name = None, transcribe_wh
         # "profanityFilterMode": "Masked",
         # "wordLevelTimestampsEnabled": True,
         # "diarizationEnabled": True#,
-        # "destinationContainerUrl": "https://backchecker.blob.core.windows.net/transcriptionresults"
+        #"destinationContainerUrl": generate_container_sas_uri(container_name='transcriptionresults', policy_id='results-access-policy') https://github.com/MicrosoftDocs/azure-docs/issues/46744
         # "timeToLive": "PT1H"
     }
 
@@ -260,7 +260,7 @@ def launch_transcription(locale, container_name, blob_name = None, transcribe_wh
     # transcription_definition = transcribe_with_custom_model(api, RECORDINGS_BLOB_URI, properties)
 
     elif transcribe_whole_container:
-        recordings_container_sas_uri = generate_container_sas_uri(container_name=container_name)
+        recordings_container_sas_uri = generate_container_sas_uri(container_name=container_name, policy_id='my-access-policy-id')
         transcription_definition = transcribe_from_container(recordings_container_sas_uri, properties, locale)
 
     created_transcription, status, headers = api.create_transcription_with_http_info(transcription=transcription_definition)
