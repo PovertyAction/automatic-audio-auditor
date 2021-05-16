@@ -4,7 +4,7 @@ import numpy as np
 import string
 import sys
 import json
-
+import argparse
 import transcript_generator
 import text_differences
 import questionnaire_texts
@@ -318,8 +318,6 @@ class AnswerAnalyzer:
         return response, reason
 
 
-
-
 def compute_offset_and_duration(ta_row, first_q_offset=0, next_ta_row=None):
     q_first_appeared = ta_row['First appeared (seconds into survey)']-first_q_offset
 
@@ -418,7 +416,7 @@ class QuestionAnalyzer:
             repeated_q_number = self.repeated_q_number)
 
         if not self.q_transcript:
-            print_if_debugging(f'Couldnt find transcript in transcrips database for {self.q_code}')
+            print(f'Couldnt find transcript in transcrips database for {self.q_code}')
             return False
 
         #Get % of script that was actually pronounced
@@ -442,7 +440,7 @@ class QuestionAnalyzer:
 
         #Prepare response dict
         response = self.create_response_dict(answer_analyzer)
-
+        print(f"!!Analysis ready for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}.")
         return response
 
 
@@ -482,7 +480,7 @@ class QuestionAnalyzer:
             q_code = self.q_code,
             repeate_group_q = self.repeate_group_q,
             repeated_q_number = self.repeated_q_number) is not None:
-            print(f">>>Transcript found for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}")
+            # print(f">>>Transcript found for {self.survey_entrie_analyzer.audio_auditor.params['project_name']} {self.survey_entrie_analyzer.case_id} {self.q_code}")
             return
 
         #If task already exists, do not create it
@@ -500,9 +498,7 @@ class QuestionAnalyzer:
         offset, duration = compute_offset_and_duration(
             ta_row = self.ta_row,
             first_q_offset= self.survey_entrie_analyzer.start_recording_ta_offset,
-            previous_ta_row= self.previous_ta_row,
             next_ta_row = self.next_ta_row)
-    
 
         task_info = {
             'audio_url':self.survey_entrie_analyzer.audio_path,
@@ -648,23 +644,42 @@ class SurveyEntrieAnalyzer:
 
         #Now we create transcriptio task for each question, looping over the text audit entries
         q_results = []
-        previous_ta_row = None
-        next_ta_row = None
+
         for index, ta_row in self.text_audit_df.iterrows():
 
             #Skip initial part of text audit which are not related to questions
             if(index<self.start_recording_ta_index or index > self.last_question_index):
                 continue
 
-            next_ta_row = self.text_audit_df.iloc[index+1]
+            #Get previous and next ta row
+            if index+1 <= self.text_audit_df.shape[0]:
+                next_ta_row = self.text_audit_df.iloc[index+1]
+            else:
+                next_ta_row = None
+
+            if index-1 >= 0:
+                previous_ta_row = self.text_audit_df.iloc[index-1]
+            else:
+                previous_ta_row = None
 
             q_analyzer = QuestionAnalyzer(self, ta_row, previous_ta_row, next_ta_row)
             q_analyzer.create_transcript_task()
 
 
 class AudioAuditor:
-    def __init__(self, name, operating_system):
-        self.params = aa_params.get_project_params(name, operating_system)
+    def __init__(self, project_id, os_id):
+
+        projects = {
+            1:'RECOVER_RD1_COL',
+            2:'RECOVER_RD3_COL'}
+        project_name = projects[project_id]
+
+        operating_systems = {
+            1:'windows',
+            2:'linux'}
+        operating_system = operating_systems[os_id]
+
+        self.params = aa_params.get_project_params(project_name, operating_system)
 
         #Load survey data
         surveys_df, self.survey_label_dict, self.survey_value_label_dict = import_data(self.params['survey_df_path'])
@@ -685,6 +700,7 @@ class AudioAuditor:
             return completed_surveys_df
         self.completed_surveys_df = get_completed_surveys(surveys_df)
 
+        print(f'self.completed_surveys_df.shape[0]: {self.completed_surveys_df.shape[0]}')
         #Filter completed_surveys_df to leave only cases id that were selected for analysis (if no selection made, all will be analyzed)
         def filter_completed_surveys_to_only_selected_cases():
 
@@ -696,13 +712,41 @@ class AudioAuditor:
                 selected_cases_ids = self.params['cases_to_check']
                 self.completed_surveys_df = self.completed_surveys_df[self.completed_surveys_df[self.params['col_case_id']].isin(selected_cases_ids)]
         filter_completed_surveys_to_only_selected_cases()
-
+        print(self.completed_surveys_df.shape[0])
         def sort_surveys_by_case_id_and_reset_index():
             self.completed_surveys_df = self.completed_surveys_df.sort_values(by=['caseid'])
             self.completed_surveys_df.reset_index(drop=True, inplace=True)
         sort_surveys_by_case_id_and_reset_index()
 
         self.n_rows_to_process = self.completed_surveys_df.shape[0]
+
+    def run_task(self, task_id):
+        tasks = {
+            1:'CREATE_TRANSCRIPTION_TASKS',
+            2:'UPLOAD_TRANSCRIPT_AUDIO_FILES',
+            3:'LAUNCH_TRANSCRIPT_TASKS',
+            4:'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
+            5:'LIVE_TRANSCRIPTIONS',
+            6:'ANALYZE_TRANSCRIPTS',
+            7:'CREATE_REPORTS'}
+
+        task = tasks[args.task_id]
+
+        if task == 'CREATE_TRANSCRIPTION_TASKS':
+            self.create_all_surveys_transcript_tasks()
+        elif task == 'UPLOAD_TRANSCRIPT_AUDIO_FILES':
+            self.upload_transcript_tasks_audio_files(trancript_engine = 'azure_batch')
+        elif task == 'LAUNCH_TRANSCRIPT_TASKS':
+            self.launch_transcript_tasks(trancript_engine = 'azure_batch', language = audio_auditor.params['language'])
+        elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
+            self.receive_azure_batch_transcriptions(trancript_engine = 'azure_batch')
+        elif task == 'LIVE_TRANSCRIPTIONS':
+            self.run_live_transcriptions(language = audio_auditor.params['language'])
+        elif task == 'ANALYZE_TRANSCRIPTS':
+            self.analyze_all_survey_transcripts()
+        elif task == 'CREATE_REPORTS':
+            report_generation.generate_reports(project_params = audio_auditor.params)
+
 
     def create_all_surveys_transcript_tasks(self):
         '''
@@ -760,40 +804,49 @@ class AudioAuditor:
             survey_response_analyzer = SurveyEntrieAnalyzer(self, survey_row)
             survey_response_analyzer.analyze_survey_transcript()
 
+
+def parse_args():
+    """ Parse command line arguments.
+    """
+    parser = argparse.ArgumentParser(description="Automatic Audio Auditor")
+
+    parser.add_argument(
+        "--project_id",
+        help="Id of project to analyze.\
+            Options: 1:RECOVER_RD1_COL, 2:RECOVER_RD3_COL",
+        default=None,
+        required=True,
+        type=int
+    )
+
+    parser.add_argument(
+        "--task_id",
+        help="Id of task to launch. \
+            Options: 1:CREATE_TRANSCRIPTION_TASKS, \
+            2:UPLOAD_TRANSCRIPT_AUDIO_FILES, 3:LAUNCH_TRANSCRIPT_TASKS, \
+            4:RECEIVE_AZURE_BATCH_TRANSCRIPTIONS, \
+            5:LIVE_TRANSCRIPTIONS, 6:ANALYZE_TRANSCRIPTS, \
+            7:CREATE_REPORTS RECOVER_RD3_COL",
+        default=None,
+        required=True,
+        type=int
+    )
+
+    parser.add_argument(
+        "--os_id",
+        help="Id of operating system where system is run. \
+            Options: 1:Windows, 2:Linux",
+        default=None,
+        required=True,
+        type=int
+    )
+
+    return parser.parse_args()
+
+
 if __name__=='__main__':
 
-    projects_ids_to_names = {'1':'RECOVER_RD1_COL','3':'RECOVER_RD3_COL'}
+    args = parse_args()
 
-    tasks = {
-        '1':'CREATE_TRANSCRIPTION_TASKS',
-        '2':'UPLOAD_TRANSCRIPT_AUDIO_FILES',
-        '3':'LAUNCH_TRANSCRIPT_TASKS',
-        '4':'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS',
-        '5':'LIVE_TRANSCRIPTIONS',
-        '6':'ANALYZE_TRANSCRIPTS',
-        '7':'CREATE_REPORTS'
-        }
-
-    project_name = projects_ids_to_names[sys.argv[1]]
-    task = tasks[sys.argv[2]]
-    operating_system = sys.argv[3]
-
-    print(project_name)
-    print(task)
-
-    audio_auditor = AudioAuditor(project_name, operating_system)
-
-    if task == 'CREATE_TRANSCRIPTION_TASKS':
-        audio_auditor.create_all_surveys_transcript_tasks()
-    elif task == 'UPLOAD_TRANSCRIPT_AUDIO_FILES':
-        audio_auditor.upload_transcript_tasks_audio_files(trancript_engine = 'azure_batch')
-    elif task == 'LAUNCH_TRANSCRIPT_TASKS':
-        audio_auditor.launch_transcript_tasks(trancript_engine = 'azure_batch', language = audio_auditor.params['language'])
-    elif task == 'RECEIVE_AZURE_BATCH_TRANSCRIPTIONS':
-        audio_auditor.receive_azure_batch_transcriptions(trancript_engine = 'azure_batch')
-    elif task == 'LIVE_TRANSCRIPTIONS':
-        audio_auditor.run_live_transcriptions(language = audio_auditor.params['language'])
-    elif task == 'ANALYZE_TRANSCRIPTS':
-        audio_auditor.analyze_all_survey_transcripts()
-    elif task == 'CREATE_REPORTS':
-        report_generation.generate_reports(project_params = audio_auditor.params)
+    audio_auditor = AudioAuditor(args.project_id, args.os_id)
+    audio_auditor.run_task(args.task_id)
