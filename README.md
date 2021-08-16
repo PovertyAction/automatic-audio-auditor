@@ -18,17 +18,16 @@ To begin with, the Automatic Audio Auditor will supplement manual audits and hel
 This project is under development: we are still heavily working on it and testing it.
 
 Next Steps in developing the project:
-- Find more precise ways of identifying where questions are present in audio recordings.
-- Improve detection of question locations in audio recordings
+- Find more precise ways of identifying where questions are present in audio recordings. For the moment we are relying on text audits (and soon advanced text audits - eventlogs), but there could be other strategies to think about.
+- When comparing transcript to questionnaire, consider best way to detect differences. Maybe we would only like to check if some key words are present, for example.
 - Continue developing an Azure Cognitive Services based application, particularly one that works with generation of batch transcriptions
-- Develop an offline DeepSpeech based solution
-- Build training sets with local languages for training
-- Train transcription models and fine tune
+- Develop an offline DeepSpeech based solution. Possibly build training sets with local languages for training. Train transcription models and fine tune
+- Manually create transcripts so as to check if automatic transcript generator works well
+- Study transcript engine performance in different languages and contexts
 - Scale up the solution and design a system to offer the service to all country offices.
 - Testing system on field surveys data, in contrast to phone survey data
 - Design other ways to detect data quality issues apart from current checks (for example,  detecting probing, identification of speakers, considering amount of background noise, amount of people speaking, tone, etc)
 - Considering transcription model biases and variance in performance for different contexts
-
 
 ## Files in the repo
 
@@ -42,16 +41,45 @@ Next Steps in developing the project:
 * outputs_writer.py: Functions to save outputs
 * DeepSpeech/*.py scripts: All functionality for using and training DeepSpeech models.
 
-## How to run
+## Setup
 
 More documentation will be added soon. For the moment, run with following command:
 
-To install dependencies:
+Create a python virtual env:
+
+`python3 -m venv venv`
+
+(Install python3 venv if you dont have it with `sudo apt-get install python3-venv`)
+
+Activate venv
+
+`source venv/bin/activate`
+
+Install dependencies:
 
 `pip -r install requirements.txt`
 
-To run tool:
+### Azure keys
+
+Add the file `azure_keys.py` in the Azure folder.
+
+# How to run
 
 `python audio_auditor project_id task_id operating_system`
 
-Check aa_params.py to find available project_ids.
+Project ids:
+RECOVER_RD1_COL: 1
+RECOVER_RD3_COL: 2
+
+Tasks ids:
+1:CREATE_TRANSCRIPTION_TASKS
+2:UPLOAD_TRANSCRIPT_AUDIO_FILES
+3:LAUNCH_TRANSCRIPT_TASKS
+4:RECEIVE_AZURE_BATCH_TRANSCRIPTIONS
+5:LIVE_TRANSCRIPTIONS
+6:ANALYZE_TRANSCRIPTS
+7:CREATE_REPORTS
+
+Operating systems:
+'windows': 1
+'linux': 2
