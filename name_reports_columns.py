@@ -1,0 +1,7 @@
+col_enum_id = 'Enum ID'
+col_case_id = 'Case ID'
+col_q_code = 'Question code'
+col_q_missing = 'Question missing?'
+col_q_read_inappropiately = 'Question read inappropiately?'
+col_answer_congruity = 'Congruity between respondents answer and surveyCTO'
+col_perc_q_missing = 'Perc. of Q script missing'
