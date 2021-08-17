@@ -43,7 +43,11 @@ Next Steps in developing the project:
 
 ## Setup
 
-More documentation will be added soon. For the moment, run with following command:
+To install all dependencies, run 
+
+`pip -r install requirements.txt`
+
+Its recommended to do this after activating a virtual environment. To set up one in Linux:
 
 Create a python virtual env:
 
@@ -54,10 +58,6 @@ Create a python virtual env:
 Activate venv
 
 `source venv/bin/activate`
-
-Install dependencies:
-
-`pip -r install requirements.txt`
 
 ### Azure keys
 
