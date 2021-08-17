@@ -65,11 +65,13 @@ Add the file `azure_keys.py` in the Azure folder.
 
 # How to run
 
-`python audio_auditor project_id task_id operating_system`
+`python audio_auditor --project_id your_project_id --task_id chosen_task_id --os_id os_id`
+
+Example:
+`python audio_auditor.py --project_id 1 --task_id 1 --os_id 2`
 
 Project ids:
-RECOVER_RD1_COL: 1
-RECOVER_RD3_COL: 2
+RECOVER_RD3_COL: 1
 
 Tasks ids:
 1:CREATE_TRANSCRIPTION_TASKS

@@ -21,8 +21,6 @@ In addition, it uses `vad_transcriber` from DeepSpeech-examples repo. So import 
 
 ### Building trains.csv, dev.csv and test.csv
 
-[PENDING]
-
 Check out DeepSpeech documentation to learn how these files should be.
 
 ## Training your model with your ready datasets
