@@ -670,8 +670,7 @@ class AudioAuditor:
     def __init__(self, project_id, os_id):
 
         projects = {
-            1:'RECOVER_RD1_COL',
-            2:'RECOVER_RD3_COL'}
+            1:'RECOVER_RD3_COL'}
         project_name = projects[project_id]
 
         operating_systems = {
@@ -813,7 +812,7 @@ def parse_args():
     parser.add_argument(
         "--project_id",
         help="Id of project to analyze.\
-            Options: 1:RECOVER_RD1_COL, 2:RECOVER_RD3_COL",
+            Options: 1:RECOVER_RD3_COL",
         default=None,
         required=True,
         type=int

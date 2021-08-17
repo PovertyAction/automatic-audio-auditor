@@ -1,29 +1,13 @@
 projects_params = {
-    'RECOVER_RD1_COL': {
-        'project_name':'RECOVER_RD1_COL',
-        'language' : 'es-CO',
-        'survey_df_path' : 'X:\Box\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\covid_col_may.dta',
-        'questionnaire_path' : 'X:\Box\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\Questionnaire\covid_col_may_19_5_2020.xlsx',
-        'media_folder_path' : "X:\Box\GRDS_Resources\Data Science\Test data\Raw\RECOVR_RD1_COL\media",
-
-
-        'col_text_audit_path' : 'text_audit_field',
-
-        'q_when_recording_starts' : 'cons1_grp[1]/consented_grp[1]/note_dem',
-        'last_question' : 'cons1_grp[1]/consented_grp[1]/note_end_1',
-        'survey_cto_yes_no_values': {'yes':'Yes', 'no':'No'},
-        'col_enumerator_id': 'enumerator'
-
-        },
     'RECOVER_RD3_COL': {
         'project_name':'RECOVER_RD3_COL',
         'language' : 'es-CO',
-        'linux_survey_df_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/Encuesta COVID R3.dta",
-        'linux_questionnaire_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/01 Instruments/03 Final instrument/02 SurveyCTO/202011181- Covid Round 3_IPACOL_3.xlsx",
-        'linux_media_folder_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/3_Ongoing Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media",
-        'windows_survey_df_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\Encuesta COVID R3.dta",
-        'windows_questionnaire_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\01 Instruments\\03 Final instrument\\02 SurveyCTO\\202011181- Covid Round 3_IPACOL_3.xlsx",
-        'windows_media_folder_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\3_Ongoing Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media",
+        'linux_survey_df_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/4_Completed Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/Encuesta COVID R3.dta",
+        'linux_questionnaire_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/4_Completed Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/01 Instruments/03 Final instrument/02 SurveyCTO/202011181- Covid Round 3_IPACOL_3.xlsx",
+        'linux_media_folder_path' : "/mnt/x/Box/CP_Projects/IPA_COL_Projects/4_Completed Projects/IPA_COL_COVID-19_Survey/07_Questionnaires & Data/04 November/06 rawdata/SurveyCTO/media",
+        'windows_survey_df_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\4_Completed Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\Encuesta COVID R3.dta",
+        'windows_questionnaire_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\4_Completed Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\01 Instruments\\03 Final instrument\\02 SurveyCTO\\202011181- Covid Round 3_IPACOL_3.xlsx",
+        'windows_media_folder_path' : "X:\\Box\\CP_Projects\\IPA_COL_Projects\\4_Completed Projects\\IPA_COL_COVID-19_Survey\\07_Questionnaires & Data\\04 November\\06 rawdata\\SurveyCTO\\media",
         'col_text_audit_path' : 'text_audit',
 
         'q_when_recording_starts' : 'cons2_audio',
